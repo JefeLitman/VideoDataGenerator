@@ -13,7 +13,8 @@ is that the older version are in my repository
 - Features:
     - The option of `original_size` that specified the original size of the frames 
     to work.
-    - Change the behaviour of 
+    - Change the behaviour of the `conserve_original` parameter when it is
+    specified to True.
     
 - Future features:
     - It will work with the API of tensorflow `Dataset.from_generator`.
@@ -60,7 +61,7 @@ this tool for your projects.
 process of spliting the frames of the videos**
 
 When you create the `VideoDataGenerator` it will ask your for this parameters:
-- `directory_path`: String of the dataset path.
+- `directory_path`: String of the dataset path. **Obligatory**.
 - `batch_size`: Default in 32, it specifies the size of batches to generate.
 - `original_frame_size`: Default None, it resize the original image before
 applying a transformation over it. None means the original size and you must pass the 
