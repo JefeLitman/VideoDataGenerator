@@ -1,11 +1,13 @@
-"""Video Data Generator for Any Video Dataset with Custom Tranformations
-You can use it in your own and only have two dependecies with opencv and numpy.
+"""Video Data Generator for Any Video Dataset with Custom Transformations
+You can use it in your own and only have two dependencies with opencv and numpy.
 """
 
 import os
 import cv2
 import warnings
 import numpy as np
+from multiprocessing import Pool
+from concurrent.futures import ThreadPoolExecutor
 
 class VideoDataGenerator():
     """Clase para cargar todos los datos de un Dataset a partir de la ruta
@@ -45,6 +47,9 @@ class VideoDataGenerator():
                                 que se hara sobre los videos. Por defecto en (None, None).
             shuffle: Booleano que determina si deben ser mezclados aleatoreamente los datos.
                         Por defecto en False.
+            conserve_original: Booleano que determina si se debe guardar los datos originales
+                                          junto a los datos transformados para entregarlos. Por defecto
+                                          en False
 
             Aclaratoria es que esta clase incluye por defecto las carpetas de train, test y dev,
             ademas, siempre usa la notacion de canales al final"""
@@ -57,6 +62,8 @@ class VideoDataGenerator():
         self.batch_size = batch_size
         self.video_frames = video_frames
         self.transformation_index = 0
+        self.multiproceso = Pool()
+        self.multihilo = ThreadPoolExecutor()
 
         """Proceso de revisar que los directorios del path esten en la jerarquia correcta"""
         directories = os.listdir(self.ds_directory)
