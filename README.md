@@ -86,9 +86,6 @@ must be done over the video after loaded. For more information read the below se
 **Future release**
 - `frame_crop`: Default is (None, None), it specifies what type of operation 
 over the spatial axis must be done. For more information read the below section.
-- `frame_transformation`: Default None, it specifies what transformation 
-must be done in every frame of a video after loaded. For more information 
-read the below section. **Future release**
 - `shuffle`: Default False, Boolean that specifies if the data must be shuffle 
 or not.
 - `conserve_original`: Default False, Boolean that specifies if for every 
@@ -96,6 +93,8 @@ transformation done in the data the original form of the data should be
 conserved. For more information read the below section.
 
 ### Methods
+
+Not yet :'D
 
 ### Transformation and basics
 
@@ -210,6 +209,7 @@ the width dimension and $y$ with the height dimension. The parameter of the func
 a numpy array of the frame (loaded) and return a python list of list (matrix).
 
 **Video transformation**
+
 In construction
 
 ### Do you want to contribute?
