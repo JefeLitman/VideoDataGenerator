@@ -104,6 +104,10 @@ class VideoDataGenerator():
                 'por que tomo la opcion %s' % frame_crop[0]
             )
 
+        """Proceso de generar los path de los videos para la verificacion subsiguiente de parametros"""
+        self.generate_classes()
+        self.generate_videos_paths()
+
         """Proceso de definir el tamaño original de todas las imagenes si no se entrega
         el parametro de original size y establecer el tamaño de los frames"""
         if original_frame_size:
@@ -125,8 +129,6 @@ class VideoDataGenerator():
                                                                                                                h = self.frame_size[1]))
 
         """Proceso de generar los datos con o sin transformaciones"""
-        self. generate_classes()
-        self.generate_videos_paths()
         if conserve_original and temporal_crop[0] not in (None, 'sequential'):
             self.temporal_crop(mode = 'sequential', custom_fn=temporal_crop[1])
         self.temporal_crop(mode = temporal_crop[0], custom_fn=temporal_crop[1])
