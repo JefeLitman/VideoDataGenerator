@@ -114,7 +114,7 @@ class VideoDataGenerator():
             self.original_size = original_frame_size
         else:
             frames_path = os.path.join(self.videos_train_path[0], sorted(os.listdir(self.videos_train_path[0]))[0])
-            self.original_size = self.load_raw_frame(frames_path).shape[1::-1]
+            self.original_size = self.load_raw_frame(frames_path, original_size_created=False).shape[1::-1]
         if frame_size:
             self.frame_size = frame_size
         else:
@@ -294,7 +294,7 @@ class VideoDataGenerator():
                 'encuentra la carpeta dev y por ende no se tienen datos en dev'
             )
 
-    def load_raw_frame(self,frame_path, channels = 3):
+    def load_raw_frame(self,frame_path, channels = 3, original_size_created = True):
         """Metodo que se encarga de cargar los frames dada la ruta en memoria
         Args:
             frame_path: String que posee la ruta absoluta del frame
@@ -305,7 +305,7 @@ class VideoDataGenerator():
             img =  cv2.cvtColor(cv2.imread(frame_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
         else:
             img = cv2.imread(frame_path, cv2.IMREAD_UNCHANGED)
-        if self.original_size:
+        if original_size_created:
             return cv2.resize(img, tuple(self.original_size))
         else:
             return img
