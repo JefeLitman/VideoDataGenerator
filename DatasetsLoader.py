@@ -305,7 +305,10 @@ class VideoDataGenerator():
             img =  cv2.cvtColor(cv2.imread(frame_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
         else:
             img = cv2.imread(frame_path, cv2.IMREAD_UNCHANGED)
-        return cv2.resize(img, tuple(self.original_size))
+        if self.original_size:
+            return cv2.resize(img, tuple(self.original_size))
+        else:
+            return img
 
     def resize_frame(self, image):
         """Metodo que se encarga de redimensionar un frame segun el tamaño
