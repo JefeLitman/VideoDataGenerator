@@ -6,21 +6,15 @@ in a folder and load sequentially from it.
 the notation of channels in the last dimension. NFHWC (N - Batch, F - Frames, 
 H - Height, W - Widht and C - Channels). 
 
-**Actual version: v1.7 (If you ask why the jump from v1.0 to v1.7, the reason 
-is that the older version are in my repository 
-[Biv2LabNN](https://github.com/JefeLitman/Biv2LabNN/commits/master))**
+**Actual version: v1.8**
 
 - Features:
-    - The option of `original_size` that specified the original size of the frames 
-    to work.
-    - Change the behaviour of the `conserve_original` parameter when it is
-    specified to True to add sequential elements.
+    - Work with the API of tensorflow `keras.model.fit_generator`.
     
 - Future features:
-    - It will work with the API of tensorflow `keras.mode.fit_generator`.
     - Add `video_transformation`.
     - Do all the heavy task in parallel with threads and multiprocessors.
-    - Do the `frame_trasnformation`and `video_transformation` in parallel 
+    - Do the `video_transformation` in parallel 
     with threads and multiprocessors.
     - Option to establish `video_frames` in `None` and all the videos will have the same length 
     given by the video with the minimum frames.
@@ -92,9 +86,41 @@ or not.
 transformation done in the data the original form of the data should be
 conserved. For more information read the below section.
 
-### Methods
-
-Not yet :'D
+### Attributes and Methods
+The following attributes and methods are public and the principal core to use
+`VideoDataGenerator` object.
+- **Attributes**
+    - `VideoDataGenerator.train_batches`: The total number of steps or batches
+    that train data contains.
+    - `VideoDataGenerator.test_batches`: The total number of steps or batches
+    that test data contains.
+    - `VideoDataGenerator.dev_batches`: The total number of steps or batches
+    that dev data contains.
+    - `VideoDataGenerator.train_batch_index`: The index or position at what
+    batch the object is in the train data.
+    - `VideoDataGenerator.test_batch_index`: The index or position at what
+    batch the object is in the test data.
+    - `VideoDataGenerator.dev_batch_index`: The index or position at what
+    batch the object is in the dev data.
+- **Methods**
+    - `VideoDataGenerator.get_next_train_batch(n_canales = 3)`: Method that return
+    a tuple in the order (batch, labels) of the train data. The parameter n_canales
+    specifies how many channels you want to upload your frames (Default to 3).
+    - `VideoDataGenerator.get_next_test_batch(n_canales = 3)`: Method that return
+    a tuple in the order (batch, labels) of the test data. The parameter n_canales
+    specifies how many channels you want to upload your frames (Default to 3).
+    - `VideoDataGenerator.get_next_dev_batch(n_canales = 3)`: Method that return
+    a tuple in the order (batch, labels) of the dev data. The parameter n_canales
+    specifies how many channels you want to upload your frames (Default to 3).
+    - `VideoDataGenerator.get_train_generator(n_canales = 3)`: Method that return 
+    a python generator based in `VideoDataGenerator.get_next_train_batch(n_canales = 3)`
+    and yields (batch, labels) elements to pass as arguments to the neural network.
+    - `VideoDataGenerator.get_test_generator(n_canales = 3)`: Method that return 
+    a python generator based in `VideoDataGenerator.get_next_test_batch(n_canales = 3)`
+    and yields (batch, labels) elements to pass as arguments to the neural network.
+    - `VideoDataGenerator.get_dev_generator(n_canales = 3)`: Method that return 
+    a python generator based in `VideoDataGenerator.get_next_dev_batch(n_canales = 3)`
+    and yields (batch, labels) elements to pass as arguments to the neural network.
 
 ### Transformation and basics
 
@@ -104,7 +130,7 @@ The following order is how the `VideoDataGenerator` applies the transformations
 specified:
 1. Temporal crop
 2. Frame crop
-3. Video transformation
+3. Video transformation (Not yet)
 
 **Basic parameters**
 

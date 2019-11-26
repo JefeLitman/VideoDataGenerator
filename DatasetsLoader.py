@@ -5,8 +5,6 @@ You can use it in your own and only have two dependencies with opencv and numpy.
 import os
 import cv2
 import numpy as np
-from multiprocessing import Pool
-from concurrent.futures import ThreadPoolExecutor
 
 class VideoDataGenerator():
     """Clase para cargar todos los datos de un Dataset a partir de la ruta
@@ -61,8 +59,6 @@ class VideoDataGenerator():
         self.batch_size = batch_size
         self.video_frames = video_frames
         self.transformation_index = 0
-        self.multiproceso = Pool()
-        self.multihilo = ThreadPoolExecutor()
 
         """Proceso de revisar que los directorios del path esten en la jerarquia correcta"""
         directories = os.listdir(self.ds_directory)
@@ -134,16 +130,16 @@ class VideoDataGenerator():
         self.temporal_crop(mode = temporal_crop[0], custom_fn=temporal_crop[1])
         self.frame_crop(mode=frame_crop[0], custom_fn=frame_crop[1], conserve_original=conserve_original)
 
+        self.complete_batches()
         if shuffle:
             self.shuffle_videos()
-        self.complete_batches()
 
     def generate_classes(self):
         """Metodo que se encarga de generar el numero de clases, los nombres
         de clases, numeros con indices de clase y el diccionario que convierte de clase
         a numero como de numero a clase"""
 
-        self.to_class = sorted(os.listdir(self.train_path)) #Equivale al vector de clases
+        self.to_class = [clase.lower() for clase in sorted(os.listdir(self.train_path))] #Equivale al vector de clases
         self.to_number = dict((name, index) for index,name in enumerate(self.to_class))
 
     def generate_videos_paths(self):
@@ -154,7 +150,7 @@ class VideoDataGenerator():
         if self.dev_path:
             self.videos_dev_path = []
 
-        for clase in self.to_class:
+        for clase in sorted(os.listdir(self.train_path)):
 
             videos_train_path = os.path.join(self.train_path,clase)
             self.videos_train_path += [os.path.join(videos_train_path,i) for i in sorted(os.listdir(videos_train_path))]
@@ -171,20 +167,23 @@ class VideoDataGenerator():
         residuo = len(self.train_data) % self.batch_size
         if residuo != 0:
             self.train_batches += 1
-            self.train_data = np.append(self.train_data, self.train_data[:self.batch_size - residuo])
+            random_index = np.random.randint(0, len(self.train_data) - self.batch_size)
+            self.train_data +=  self.train_data[random_index:self.batch_size - residuo]
         
         self.test_batches = int( len(self.test_data) /  self.batch_size)
         residuo = len(self.test_data) % self.batch_size
         if residuo != 0:
             self.test_batches += 1
-            self.test_data = np.append(self.test_data, self.test_data[:self.batch_size - residuo])
+            random_index = np.random.randint(0, len(self.test_data) - self.batch_size)
+            self.test_data +=   self.test_data[random_index:self.batch_size - residuo]
         
         if self.dev_path:
             self.dev_batches = int( len(self.dev_data) / self.batch_size)
             residuo = len(self.dev_data) % self.batch_size
             if residuo != 0:
                 self.dev_batches += 1
-                self.dev_data = np.append(self.dev_data, self.dev_data[:self.batch_size - residuo])
+                random_index = np.random.randint(0, len(self.dev_data) - self.batch_size)
+                self.dev_data += self.dev_data[random_index:self.batch_size - residuo]
 
     def shuffle_videos(self):
         """Metodo que se encarga de realizar shuffle a los datos si esta
@@ -212,7 +211,10 @@ class VideoDataGenerator():
             image = function(image)
             video.append(image)
 
-        return np.asarray(video, dtype=np.float32)
+        if channels == 1:
+            return np.asarray(video, dtype=np.float32).reshape((self.video_frames,self.frame_size[1], self.frame_size[0],1))
+        else:
+            return np.asarray(video, dtype=np.float32)
 
     def get_next_train_batch(self, n_canales = 3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
@@ -271,21 +273,21 @@ class VideoDataGenerator():
                     n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
                     """
         if self.dev_path:
-            if self.test_batch_index >= self.test_batches:
-                self.test_batch_index = 0
+            if self.dev_batch_index >= self.dev_batches:
+                self.dev_batch_index = 0
 
-            start_index = self.test_batch_index * self.batch_size
-            end_index = (self.test_batch_index + 1) * self.batch_size
+            start_index = self.dev_batch_index * self.batch_size
+            end_index = (self.dev_batch_index + 1) * self.batch_size
 
             batch = []
             labels = []
             for index in range(start_index, end_index):
-                label = tuple(self.test_data[index].values())[0][1]
-                video = self.load_video(self.test_data[index], channels=n_canales)
+                label = tuple(self.dev_data[index].values())[0][1]
+                video = self.load_video(self.dev_data[index], channels=n_canales)
                 labels.append(label)
                 batch.append(video)
 
-            self.test_batch_index += 1
+            self.dev_batch_index += 1
 
             return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int32)
         else:
@@ -293,6 +295,33 @@ class VideoDataGenerator():
                 'No se puede llamar a la funcion debido a que en el directorio no se'
                 'encuentra la carpeta dev y por ende no se tienen datos en dev'
             )
+
+    def get_train_generator(self, n_canales = 3):
+        """Metodo que se encarga de retornar el generador de los batches de
+        entrenamiento retornardo una tupla de batch y label.
+        Args:
+            n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
+        """
+        while True:
+            yield self.get_next_train_batch(n_canales)
+
+    def get_test_generator(self, n_canales = 3):
+        """Metodo que se encarga de retornar el generador de los batches de
+        testeo retornardo una tupla de batch y label.
+        Args:
+            n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
+        """
+        while True:
+            yield self.get_next_test_batch(n_canales)
+
+    def get_dev_generator(self, n_canales = 3):
+        """Metodo que se encarga de retornar el generador de los batches de
+        dev retornardo una tupla de batch y label.
+        Args:
+            n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
+        """
+        while True:
+            yield self.get_next_dev_batch(n_canales)
 
     def load_raw_frame(self,frame_path, channels = 3, original_size_created = True):
         """Metodo que se encarga de cargar los frames dada la ruta en memoria
@@ -315,6 +344,164 @@ class VideoDataGenerator():
         especificado por el usuario"""
         return cv2.resize(image, tuple(self.frame_size))
 
+    def sequential_temporal_crop(self, video_path, list_name):
+        """Metodo que se encarga de realizar el corte temporal secuencial en
+       un video dado por su path y se agregara a la lista indicada.
+        Args:
+            video_path: String del ath donde se encuentran los frames del video.
+            list_name: String con las opciones ("train", "test", "dev") para escoger
+                              a que lista se agregaran los videos de formas secuencial.
+        """
+        if not isinstance(video_path, str):
+            raise ValueError('Se ha pasado video_path como una instancia diferente'
+                             'a lo que es un string. Instancia pasada: {i}'.format(i=type(video_path)))
+        video = video_path
+        frames_path = [os.path.join(video, frame) for frame in sorted(os.listdir(video))]
+        while len(frames_path) < self.video_frames:
+            frames_path += frames_path[:self.video_frames - len(frames_path)]
+        label = self.to_number[video.split("/")[-2].lower()]
+
+        n_veces = len(frames_path) // self.video_frames
+        for i in range(n_veces):
+            start = self.video_frames * i
+            end = self.video_frames * (i + 1)
+            frames = frames_path[start:end]
+
+            name = "tcrop" + str(self.transformation_index)
+            elemento = {(name, None): (frames, label)}
+            self.transformation_index += 1
+            if list_name == 'train':
+                self.train_data.append(elemento)
+            elif list_name == 'test':
+                self.test_data.append(elemento)
+            elif list_name == 'dev':
+                self.dev_data.append(elemento)
+            else:
+                raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                                 'pueden agregar elementos a los datos de train, test '
+                                 'y dev. Modo pasado: {i}'.format(i=list_name))
+
+    def random_temporal_crop(self, video_path, list_name, n_veces):
+        """Metodo que se encarga de realizar el corte temporal aleatorio en
+        un video dado por su path y se agregara a la lista indicada.
+                Args:
+                    video_path: String del ath donde se encuentran los frames del video.
+                    list_name: String con las opciones ("train", "test", "dev") para escoger
+                                      a que lista se agregaran los videos de formas aleatoria.
+                    n_veces: Entero que indica cuantos cortes temporales aleatorios se
+                                   deben hace sobre el video.
+        """
+        if not isinstance(video_path, str):
+            raise ValueError('Se ha pasado video_path como una instancia diferente'
+                             'a lo que es un string. Instancia pasada: {i}'.format(i=type(video_path)))
+        video = video_path
+        frames_path = [os.path.join(video, frame) for frame in sorted(os.listdir(video))]
+        while len(frames_path) < self.video_frames:
+            frames_path += frames_path[:self.video_frames - len(frames_path)]
+        label = self.to_number[video.split("/")[-2].lower()]
+
+        for _ in range(n_veces):
+            start = np.random.randint(0, len(frames_path))
+            if start + self.video_frames > len(frames_path):
+                end = self.video_frames + start - len(frames_path)
+                frames = frames_path[start:] + frames_path[: end]
+            else:
+                end = start + self.video_frames
+                frames = frames_path[start: end]
+
+            name = "tcrop" + str(self.transformation_index)
+            elemento = {(name, None): (frames, label)}
+            self.transformation_index += 1
+            if list_name == 'train':
+                self.train_data.append(elemento)
+            elif list_name == 'test':
+                self.test_data.append(elemento)
+            elif list_name == 'dev':
+                self.dev_data.append(elemento)
+            else:
+                raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                                 'pueden agregar elementos a los datos de train, test '
+                                 'y dev. Modo pasado: {i}'.format(i=list_name))
+
+    def custom_temporal_crop(self, video_path, list_name, custom_fn):
+        """Metodo que se encarga de realizar el corte temporal customizado en
+            un video dado por su path y se agregara a la lista indicada.
+                Args:
+                    video_path: String del ath donde se encuentran los frames del video.
+                    list_name: String con las opciones ("train", "test", "dev") para escoger
+                                      a que lista se agregaran los videos de formas custom.
+                    custom_fn: Callback que corresponde a la funcion customizada a la
+                                        que le aplicara sobre cada video.
+        """
+        if not isinstance(video_path, str):
+            raise ValueError('Se ha pasado video_path como una instancia diferente'
+                             'a lo que es un string. Instancia pasada: {i}'.format(i=type(video_path)))
+        video = video_path
+        frames_path = [os.path.join(video, frame) for frame in sorted(os.listdir(video))]
+        try:
+            frames = custom_fn(frames_path)
+            label = self.to_number[video.split("/")[-2].lower()]
+            n_veces = len(frames)
+            for i in range(n_veces):
+                if len(frames[i]) != self.video_frames:
+                    raise ValueError(
+                        'La longitud de los frames a agregar por medio de una '
+                        'funcion customizada debe ser igual a la especificada '
+                        'por el usuario. Longitud encontrada de %s' % len(frames[i])
+                    )
+                name = "tcrop" + str(self.transformation_index)
+                elemento = {(name, None): (frames[i], label)}
+                self.transformation_index += 1
+                if list_name == 'train':
+                    self.train_data.append(elemento)
+                elif list_name == 'test':
+                    self.test_data.append(elemento)
+                elif list_name == 'dev':
+                    self.dev_data.append(elemento)
+                else:
+                    raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                                     'pueden agregar elementos a los datos de train, test '
+                                     'y dev. Modo pasado: {i}'.format(i=list_name))
+
+        except:
+            raise AttributeError(
+                'Se espera que la funcion customizada retorne una matriz'
+                ' donde cada fila corresponde a un video con el corte temporal '
+                'y la dimension de columnas sea igual a la longitud de frames'
+                ' especificada'
+            )
+
+    def none_temporal_crop(self, video_path, list_name):
+        """Metodo que se encarga de realizar el corte temporal None en
+        un video dado por su path y se agregara a la lista indicada.
+        Args:
+            video_path: String del ath donde se encuentran los frames del video.
+            list_name: String con las opciones ("train", "test", "dev") para escoger
+                              a que lista se agregaran los videos de formas None.
+        """
+        if not isinstance(video_path, str):
+            raise ValueError('Se ha pasado video_path como una instancia diferente'
+                             'a lo que es un string. Instancia pasada: {i}'.format(i=type(video_path)))
+        video = video_path
+        name = "tcrop" + str(self.transformation_index)
+        frames_path = [os.path.join(video, frame) for frame in sorted(os.listdir(video))]
+        while len(frames_path) < self.video_frames:
+            frames_path += frames_path[:self.video_frames - len(frames_path)]
+        frames_path = frames_path[:self.video_frames]
+        label = self.to_number[video.split("/")[-2].lower()]
+        elemento = {(name, None): (frames_path, label)}
+        self.transformation_index += 1
+        if list_name == 'train':
+            self.train_data.append(elemento)
+        elif list_name == 'test':
+            self.test_data.append(elemento)
+        elif list_name == 'dev':
+            self.dev_data.append(elemento)
+        else:
+            raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                             'pueden agregar elementos a los datos de train, test '
+                             'y dev. Modo pasado: {i}'.format(i=list_name))
+
     def temporal_crop(self, mode , custom_fn):
         """Metodo que se encarga de realizar el corte temporal en los videos de
         train, test y dev segun el modo especificado y los agrega a la lista de datos.
@@ -326,56 +513,14 @@ class VideoDataGenerator():
             """ Modo secuencial, donde se toman todos los frames del video en forma
             secuencial hasta donde el video lo permita"""
             for video in self.videos_train_path:
-                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                while len(frames_path) < self.video_frames:
-                    frames_path += frames_path[:self.video_frames - len(frames_path)]
-                label = self.to_number[video.split("/")[-2]]
-
-                n_veces = len(frames_path) // self.video_frames
-                for i in range(n_veces):
-                    start = self.video_frames * i
-                    end = self.video_frames * (i+1)
-                    frames = frames_path[start:end]
-
-                    name = "tcrop" + str(self.transformation_index)
-                    elemento = { (name, None) : (frames, label) }
-                    self.transformation_index += 1
-                    self.train_data.append(elemento)
+                self.sequential_temporal_crop(video,"train")
 
             for video in self.videos_test_path:
-                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                while len(frames_path) < self.video_frames:
-                    frames_path += frames_path[:self.video_frames - len(frames_path)]
-                label = self.to_number[video.split("/")[-2]]
-
-                n_veces = len(frames_path) // self.video_frames
-                for i in range(n_veces):
-                    start = self.video_frames * i
-                    end = self.video_frames * (i + 1)
-                    frames = frames_path[start:end]
-
-                    name = "tcrop" + str(self.transformation_index)
-                    elemento = {(name, None): (frames, label)}
-                    self.transformation_index += 1
-                    self.test_data.append(elemento)
+                self.sequential_temporal_crop(video,"test")
 
             if self.dev_path:
                 for video in self.videos_dev_path:
-                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                    while len(frames_path) < self.video_frames:
-                        frames_path += frames_path[:self.video_frames - len(frames_path)]
-                    label = self.to_number[video.split("/")[-2]]
-
-                    n_veces = len(frames_path) // self.video_frames
-                    for i in range(n_veces):
-                        start = self.video_frames * i
-                        end = self.video_frames * (i + 1)
-                        frames = frames_path[start:end]
-
-                        name = "tcrop" + str(self.transformation_index)
-                        elemento = {(name, None): (frames, label)}
-                        self.transformation_index += 1
-                        self.dev_data.append(elemento)
+                    self.sequential_temporal_crop(video,"dev")
 
         elif mode == 'random':
             """Modo aleatorio, donde la funcion personalizada corresponde al numero
@@ -390,151 +535,28 @@ class VideoDataGenerator():
                     ', el valor entregado es de tipo: %s' % type(custom_fn)
                 )
             for video in self.videos_train_path:
-                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                while len(frames_path) < self.video_frames:
-                    frames_path += frames_path[:self.video_frames - len(frames_path)]
-                label = self.to_number[video.split("/")[-2]]
-
-                for _ in range(n_veces):
-                    start = np.random.randint(0,len(frames_path))
-                    if start + self.video_frames > len(frames_path):
-                        end = self.video_frames + start - len(frames_path)
-                        frames = frames_path[start : ] + frames_path[ : end]
-                    else:
-                        end = start + self.video_frames
-                        frames = frames_path[start : end]
-
-                    name = "tcrop" + str(self.transformation_index)
-                    elemento = { (name, None) : (frames, label) }
-                    self.transformation_index += 1
-                    self.train_data.append(elemento)
+                self.random_temporal_crop(video, "train", n_veces)
 
             for video in self.videos_test_path:
-                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                while len(frames_path) < self.video_frames:
-                    frames_path += frames_path[:self.video_frames - len(frames_path)]
-                label = self.to_number[video.split("/")[-2]]
-
-                for _ in range(n_veces):
-                    start = np.random.randint(0, len(frames_path))
-                    if start + self.video_frames > len(frames_path):
-                        end = self.video_frames + start - len(frames_path)
-                        frames = frames_path[start:] + frames_path[: end]
-                    else:
-                        end = start + self.video_frames
-                        frames = frames_path[start: end]
-
-                    name = "tcrop" + str(self.transformation_index)
-                    elemento = {(name, None): (frames, label)}
-                    self.transformation_index += 1
-                    self.test_data.append(elemento)
+                self.random_temporal_crop(video, "test", n_veces)
 
             if self.dev_path:
                 for video in self.videos_dev_path:
-                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                    while len(frames_path) < self.video_frames:
-                        frames_path += frames_path[:self.video_frames - len(frames_path)]
-                    label = self.to_number[video.split("/")[-2]]
-
-                    for _ in range(n_veces):
-                        start = np.random.randint(0, len(frames_path))
-                        if start + self.video_frames > len(frames_path):
-                            end = self.video_frames + start - len(frames_path)
-                            frames = frames_path[start:] + frames_path[: end]
-                        else:
-                            end = start + self.video_frames
-                            frames = frames_path[start: end]
-
-                        name = "tcrop" + str(self.transformation_index)
-                        elemento = {(name, None): (frames, label)}
-                        self.transformation_index += 1
-                        self.dev_data.append(elemento)
+                    self.random_temporal_crop(video, "dev", n_veces)
 
         elif mode == 'custom':
             """Metodo que se encarga de ejecutar la funcion customizada a cada video
             y ejecutar el metodo para obtener los datos a agregar."""
             if custom_fn:
                 for video in self.videos_train_path:
-                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                    frames = custom_fn(frames_path)
-                    label = self.to_number[video.split("/")[-2]]
-
-                    try:
-                        n_veces = len(frames)
-                        for i in range(n_veces):
-                            if len(frames[i]) != self.video_frames:
-                                raise ValueError(
-                                    'La longitud de los frames a agregar por medio de una '
-                                    'funcion customizada debe ser igual a la especificada '
-                                    'por el usuario. Longitud encontrada de %s' % len(frames[i])
-                                )
-                            name = "tcrop" + str(self.transformation_index)
-                            elemento = {(name, None): (frames[i], label)}
-                            self.transformation_index += 1
-                            self.train_data.append(elemento)
-
-                    except:
-                        raise AttributeError(
-                            'Se espera que la funcion customizada retorne una matriz'
-                            ' donde cada fila corresponde a un video con el corte temporal '
-                            'y la dimension de columnas sea igual a la longitud de frames'
-                            ' especificada'
-                        )
+                    self.custom_temporal_crop(video,"train",custom_fn)
 
                 for video in self.videos_test_path:
-                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                    frames = custom_fn(frames_path)
-                    label = self.to_number[video.split("/")[-2]]
-
-                    try:
-                        n_veces = len(frames)
-                        for i in range(n_veces):
-                            if len(frames[i]) != self.video_frames:
-                                raise ValueError(
-                                    'La longitud de los frames a agregar por medio de una '
-                                    'funcion customizada debe ser igual a la especificada '
-                                    'por el usuario. Longitud encontrada de %s' % len(frames[i])
-                                )
-                            name = "tcrop" + str(self.transformation_index)
-                            elemento = {(name, None): (frames[i], label)}
-                            self.transformation_index += 1
-                            self.test_data.append(elemento)
-
-                    except:
-                        raise AttributeError(
-                            'Se espera que la funcion customizada retorne una matriz'
-                            ' donde cada fila corresponde a un video con el corte temporal '
-                            'y la dimension de columnas sea igual a la longitud de frames'
-                            ' especificada'
-                        )
+                    self.custom_temporal_crop(video, "test", custom_fn)
 
                 if self.dev_path:
                     for video in self.videos_dev_path:
-                        frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                        frames = custom_fn(frames_path)
-                        label = self.to_number[video.split("/")[-2]]
-
-                        try:
-                            n_veces = len(frames)
-                            for i in range(n_veces):
-                                if len(frames[i]) != self.video_frames:
-                                    raise ValueError(
-                                        'La longitud de los frames a agregar por medio de una '
-                                        'funcion customizada debe ser igual a la especificada '
-                                        'por el usuario. Longitud encontrada de %s' % len(frames[i])
-                                    )
-                                name = "tcrop" + str(self.transformation_index)
-                                elemento = {(name, None): (frames[i], label)}
-                                self.transformation_index += 1
-                                self.dev_data.append(elemento)
-
-                        except:
-                            raise AttributeError(
-                                'Se espera que la funcion customizada retorne una matriz'
-                                ' donde cada fila corresponde a un video con el corte temporal '
-                                'y la dimension de columnas sea igual a la longitud de frames'
-                                ' especificada'
-                            )
+                        self.custom_temporal_crop(video, "dev", custom_fn)
             else:
                 raise ValueError('Debe pasar la funcion customizada para el '
                     'modo customizado, de lo contrario no podra usarlo. Tipo de dato'
@@ -543,38 +565,214 @@ class VideoDataGenerator():
         else:
             """Modo None, donde se toman los primeros frames del video"""
             for video in self.videos_train_path:
-                name = "tcrop" + str(self.transformation_index)
-                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                while len(frames_path) < self.video_frames:
-                    frames_path += frames_path[:self.video_frames - len(frames_path)]
-                frames_path = frames_path[:self.video_frames]
-                label = self.to_number[video.split("/")[-2]]
-                elemento = { (name, None) : (frames_path, label) }
-                self.transformation_index += 1
-                self.train_data.append(elemento)
+                self.none_temporal_crop(video, "train")
 
             for video in self.videos_test_path:
-                name = "tcrop" + str(self.transformation_index)
-                frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                while len(frames_path) < self.video_frames:
-                    frames_path += frames_path[:self.video_frames - len(frames_path)]
-                frames_path = frames_path[:self.video_frames]
-                label = self.to_number[video.split("/")[-2]]
-                elemento = {(name, None): (frames_path, label)}
-                self.transformation_index += 1
-                self.test_data.append(elemento)
+                self.none_temporal_crop(video, "test")
 
             if self.dev_path:
                 for video in self.videos_dev_path:
-                    name = "tcrop" + str(self.transformation_index)
-                    frames_path = [os.path.join(video,frame) for frame in sorted(os.listdir(video))]
-                    while len(frames_path) < self.video_frames:
-                        frames_path += frames_path[:self.video_frames - len(frames_path)]
-                    frames_path = frames_path[:self.video_frames]
-                    label = self.to_number[video.split("/")[-2]]
-                    elemento = {(name, None): (frames_path, label)}
+                    self.none_temporal_crop(video, "dev")
+
+    def sequential_frame_crop(self,list_name, conserve):
+        """Metodo que se encarga de realizar el corte espacial secuencial en
+        un video dado y se modificara en la lista indicada conservando o no los
+        datos ya colocados ahi.
+        Args:
+            list_name:String con las opciones ("train", "test", "dev") para escoger
+                              a que lista se agregaran los videos de formas secuencial.
+            conserve: Booleano que determina si conservo los datos ya calculados
+                            en la lista.
+        """
+        if list_name == 'train':
+            lista = self.train_data
+        elif list_name == 'test':
+            lista = self.test_data
+        elif list_name == 'dev':
+            lista = self.dev_data
+        else:
+            raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                             'pueden agregar elementos a los datos de train, test '
+                             'y dev. Modo pasado: {i}'.format(i=list_name))
+        original_height = self.original_size[1]
+        original_width = self.original_size[0]
+        if conserve:
+            self.none_frame_crop(list_name)
+            new_lista = None
+        else:
+            new_lista = []
+        for video in lista:
+            # Agrego los nuevos cortes de frames a los datos
+            values = tuple(video.values())[0]
+            n_veces = [original_width // self.frame_size[0], original_height // self.frame_size[1]]
+
+            for i in range(n_veces[0]):
+                for j in range(n_veces[1]):
+                    start_width = i * self.frame_size[0]
+                    end_width = start_width + self.frame_size[0]
+                    start_height = j * self.frame_size[1]
+                    end_height = start_height + self.frame_size[1]
+                    function = lambda frame: frame[start_height: end_height, start_width: end_width]
+
+                    name = "icrop" + str(self.transformation_index)
                     self.transformation_index += 1
-                    self.dev_data.append(elemento)
+                    elemento = {(name, function): values}
+                    if new_lista:
+                        new_lista.append(elemento)
+                    else:
+                        lista.append(elemento)
+        if new_lista:
+            if list_name == 'train':
+                self.train_data = new_lista
+            elif list_name == 'test':
+                self.test_data = new_lista
+            elif list_name == 'dev':
+                self.dev_data = new_lista
+
+    def random_frame_crop(self,list_name, conserve, n_veces):
+        """Metodo que se encarga de realizar el corte espacial aleatorio en
+        un video dado y se modificara en la lista indicada conservando o no los
+        datos ya colocados ahi.
+        Args:
+            list_name:String con las opciones ("train", "test", "dev") para escoger
+                              a que lista se agregaran los videos de formas secuencial.
+            conserve: Booleano que determina si conservo los datos ya calculados
+                            en la lista.
+            n_veces: Entero que indica cuantos cortes espaciales aleatorios se
+                            deben hace sobre el video.
+        """
+        if list_name == 'train':
+            lista = self.train_data
+        elif list_name == 'test':
+            lista = self.test_data
+        elif list_name == 'dev':
+            lista = self.dev_data
+        else:
+            raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                             'pueden agregar elementos a los datos de train, test '
+                             'y dev. Modo pasado: {i}'.format(i=list_name))
+        original_height = self.original_size[1]
+        original_width = self.original_size[0]
+        if conserve:
+            self.none_frame_crop(list_name)
+            new_lista = None
+        else:
+            new_lista = []
+        for video in lista:
+            # Agrego los nuevos cortes de frames a los datos
+            values = tuple(video.values())[0]
+
+            for _ in range(n_veces):
+                start_width = np.random.randint(0, original_width - self.frame_size[0])
+                end_width = start_width + self.frame_size[0]
+                start_height = np.random.randint(0, original_height - self.frame_size[1])
+                end_height = start_height + self.frame_size[1]
+                function = lambda frame: frame[start_height: end_height, start_width: end_width]
+
+                name = "icrop" + str(self.transformation_index)
+                self.transformation_index += 1
+                elemento = {(name, function): values}
+                if new_lista:
+                    new_lista.append(elemento)
+                else:
+                    lista.append(elemento)
+        if new_lista:
+            if list_name == 'train':
+                self.train_data = new_lista
+            elif list_name == 'test':
+                self.test_data = new_lista
+            elif list_name == 'dev':
+                self.dev_data = new_lista
+
+    def custom_frame_crop(self,list_name, conserve, custom_fn):
+        """Metodo que se encarga de realizar el corte espacial aleatorio en
+        un video dado y se modificara en la lista indicada conservando o no los
+        datos ya colocados ahi.
+        Args:
+            list_name:String con las opciones ("train", "test", "dev") para escoger
+                              a que lista se agregaran los videos de formas secuencial.
+            conserve: Booleano que determina si conservo los datos ya calculados
+                            en la lista.
+            custom_fn: Callback que corresponde a la funcion customizada a la
+                                que le aplicara sobre cada video.
+        """
+        if list_name == 'train':
+            lista = self.train_data
+        elif list_name == 'test':
+            lista = self.test_data
+        elif list_name == 'dev':
+            lista = self.dev_data
+        else:
+            raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                             'pueden agregar elementos a los datos de train, test '
+                             'y dev. Modo pasado: {i}'.format(i=list_name))
+        original_height = self.original_size[1]
+        original_width = self.original_size[0]
+        if conserve:
+            self.none_frame_crop(list_name)
+            new_lista = None
+        else:
+            new_lista = []
+        for video in lista:
+            # Agrego los nuevos cortes de frames a los datos
+            values = tuple(video.values())[0]
+
+            try:
+                cortes = custom_fn(original_width, original_height)
+                for corte in cortes:
+                    size_frame = (corte[1] - corte[0], corte[3] - corte[2])
+                    if size_frame[0] != self.frame_size[0] or size_frame[1] != self.frame_size[1]:
+                        raise ValueError(
+                            'El tamaño de los frames debe ser igual al tamaño '
+                            'especificado por el usuario. Tamaño encontrado de '
+                            '%s' % str(size_frame)
+                        )
+                    function = lambda frame: frame[corte[2]: corte[3], corte[0]: corte[1]]
+                    name = "icrop" + str(self.transformation_index)
+                    self.transformation_index += 1
+                    elemento = {(name, function): values}
+                    if new_lista:
+                        new_lista.append(elemento)
+                    else:
+                        lista.append(elemento)
+
+            except:
+                raise AttributeError(
+                    'Se espera que la funcion customizada retorne una matriz '
+                    'de forma que las filas es un corte a hacerle a cada video y '
+                    'las columnas sean 4 (inicio corte x, fin corte x, inicio corte '
+                    'y, fin corte y) exactamente en ese orden.'
+                )
+        if new_lista:
+            if list_name == 'train':
+                self.train_data = new_lista
+            elif list_name == 'test':
+                self.test_data = new_lista
+            elif list_name == 'dev':
+                self.dev_data = new_lista
+
+    def none_frame_crop(self, list_name):
+        """Metodo que se encarga de realizar el corte espacial None en
+        un video dado y se modificara en la lista indicada.
+        Args:
+            list_name: String con las opciones ("train", "test", "dev") para escoger
+                              a que lista se agregaran los videos de formas None.
+        """
+        if list_name == 'train':
+            lista = self.train_data
+        elif list_name == 'test':
+            lista = self.test_data
+        elif list_name == 'dev':
+            lista = self.dev_data
+        else:
+            raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                             'pueden agregar elementos a los datos de train, test '
+                             'y dev. Modo pasado: {i}'.format(i=list_name))
+        for index in range(len(lista)):
+            llave_original = tuple(lista[index].keys())[0]
+            llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
+            valores = tuple(lista[index].values())[0]
+            lista[index] = {llave_nueva: valores}
 
     def frame_crop(self,mode, custom_fn, conserve_original = False):
         """Metodo que se encarga de realizar el corte de una imagen segun el
@@ -588,152 +786,13 @@ class VideoDataGenerator():
             converse_original: Booleano por defecto en False que indica si se agregan o reemplazan
             los valores ya almacenados en la lista de datos.
             """
-        original_height = self.original_size[1]
-        original_width = self.original_size[0]
         if mode == 'sequential':
             """Modo secuencial, donde se toman por cada imagen (desde izq a der)
              y arriba hacia abajo el tamaño indicado porel usuario hasta donde se
              le permita"""
-            if conserve_original:
-                n = len(self.train_data)
-                for index in range(n):
-                    #Agrego los nuevos cortes de frames a los datos
-                    values = tuple(self.train_data[index].values())[0]
-                    n_veces = [original_width // self.frame_size[0], original_height//self.frame_size[1]]
-
-                    for i in range(n_veces[0]):
-                        for j in range(n_veces[1]):
-                            start_width = i * self.frame_size[0]
-                            end_width = start_width + self.frame_size[0]
-                            start_height = j * self.frame_size[1]
-                            end_height = start_height + self.frame_size[1]
-                            function = lambda frame: frame[start_height : end_height, start_width : end_width]
-
-                            name = "icrop" + str(self.transformation_index)
-                            self.transformation_index += 1
-                            elemento = { (name, function) : values }
-                            self.train_data.append(elemento)
-
-                    #Reemplazo la funcion de los datos ya almacenados
-                    llave_original = tuple(self.train_data[index].keys())[0]
-                    llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                    valores = tuple(self.train_data[index].values())[0]
-                    self.train_data[index] = {llave_nueva: valores}
-
-                n = len(self.test_data)
-                for index in range(n):
-                    # Agrego los nuevos cortes de frames a los datos
-                    values = tuple(self.test_data[index].values())[0]
-                    n_veces = [original_width // self.frame_size[0], original_height // self.frame_size[1]]
-
-                    for i in range(n_veces[0]):
-                        for j in range(n_veces[1]):
-                            start_width = i * self.frame_size[0]
-                            end_width = start_width + self.frame_size[0]
-                            start_height = j * self.frame_size[1]
-                            end_height = start_height + self.frame_size[1]
-                            function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                            name = "icrop" + str(self.transformation_index)
-                            self.transformation_index += 1
-                            elemento = {(name, function): values}
-                            self.test_data.append(elemento)
-
-                    # Reemplazo la funcion de los datos ya almacenados
-                    llave_original = tuple(self.test_data[index].keys())[0]
-                    llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                    valores = tuple(self.test_data[index].values())[0]
-                    self.test_data[index] = {llave_nueva: valores}
-
-                if self.dev_path:
-                    n = len(self.dev_data)
-                    for index in range(n):
-                        # Agrego los nuevos cortes de frames a los datos
-                        values = tuple(self.dev_data[index].values())[0]
-                        n_veces = [original_width // self.frame_size[0], original_height // self.frame_size[1]]
-
-                        for i in range(n_veces[0]):
-                            for j in range(n_veces[1]):
-                                start_width = i * self.frame_size[0]
-                                end_width = start_width + self.frame_size[0]
-                                start_height = j * self.frame_size[1]
-                                end_height = start_height + self.frame_size[1]
-                                function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                                name = "icrop" + str(self.transformation_index)
-                                self.transformation_index += 1
-                                elemento = {(name, function): values}
-                                self.dev_data.append(elemento)
-
-                        # Reemplazo la funcion de los datos ya almacenados
-                        llave_original = tuple(self.dev_data[index].keys())[0]
-                        llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                        valores = tuple(self.dev_data[index].values())[0]
-                        self.dev_data[index] = {llave_nueva: valores}
-            else:
-                n = len(self.train_data)
-                new_train_data = []
-                for index in range(n):
-                    # Agrego los nuevos cortes de frames a los nuevos datos
-                    values = tuple(self.train_data[index].values())[0]
-                    n_veces = [original_width // self.frame_size[0], original_height // self.frame_size[1]]
-
-                    for i in range(n_veces[0]):
-                        for j in range(n_veces[1]):
-                            start_width = i * self.frame_size[0]
-                            end_width = start_width + self.frame_size[0]
-                            start_height = j * self.frame_size[1]
-                            end_height = start_height + self.frame_size[1]
-                            function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                            name = "icrop" + str(self.transformation_index)
-                            self.transformation_index += 1
-                            elemento = {(name, function): values}
-                            new_train_data.append(elemento)
-                self.train_data = new_train_data
-
-                n = len(self.test_data)
-                new_test_data = []
-                for index in range(n):
-                    # Agrego los nuevos cortes de frames a los nuevos datos
-                    values = tuple(self.test_data[index].values())[0]
-                    n_veces = [original_width // self.frame_size[0], original_height // self.frame_size[1]]
-
-                    for i in range(n_veces[0]):
-                        for j in range(n_veces[1]):
-                            start_width = i * self.frame_size[0]
-                            end_width = start_width + self.frame_size[0]
-                            start_height = j * self.frame_size[1]
-                            end_height = start_height + self.frame_size[1]
-                            function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                            name = "icrop" + str(self.transformation_index)
-                            self.transformation_index += 1
-                            elemento = {(name, function): values}
-                            new_test_data.append(elemento)
-                self.test_data = new_test_data
-
-                if self.dev_path:
-                    n = len(self.dev_data)
-                    new_dev_data = []
-                    for index in range(n):
-                        # Agrego los nuevos cortes de frames a los nuevos datos
-                        values = tuple(self.dev_data[index].values())[0]
-                        n_veces = [original_width // self.frame_size[0], original_height // self.frame_size[1]]
-
-                        for i in range(n_veces[0]):
-                            for j in range(n_veces[1]):
-                                start_width = i * self.frame_size[0]
-                                end_width = start_width + self.frame_size[0]
-                                start_height = j * self.frame_size[1]
-                                end_height = start_height + self.frame_size[1]
-                                function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                                name = "icrop" + str(self.transformation_index)
-                                self.transformation_index += 1
-                                elemento = {(name, function): values}
-                                new_dev_data.append(elemento)
-                    self.dev_data = new_dev_data
+            self.sequential_frame_crop("train",conserve_original)
+            self.sequential_frame_crop("test", conserve_original)
+            self.sequential_frame_crop("dev", conserve_original)
 
         elif mode == 'random':
             """Modo aleatorio, donde la funcion personalizada corresponde al numero 
@@ -747,336 +806,17 @@ class VideoDataGenerator():
                     'Al usar el modo de cortes de frames aleatorio, custom_fn debe ser un entero'
                     ', el valor entregado es de tipo: %s' % type(custom_fn)
                 )
-            if conserve_original:
-                n = len(self.train_data)
-                for index in range(n):
-                    # Agrego los nuevos cortes de frames a los datos
-                    values = tuple(self.train_data[index].values())[0]
-
-                    for _ in range(n_veces):
-                        start_width = np.random.randint(0, original_width - self.frame_size[0])
-                        end_width = start_width + self.frame_size[0]
-                        start_height =np.random.randint(0, original_height - self.frame_size[1])
-                        end_height = start_height + self.frame_size[1]
-                        function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                        name = "icrop" + str(self.transformation_index)
-                        self.transformation_index += 1
-                        elemento = {(name, function): values}
-                        self.train_data.append(elemento)
-
-                    # Reemplazo la funcion de los datos ya almacenados
-                    llave_original = tuple(self.train_data[index].keys())[0]
-                    llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                    valores = tuple(self.train_data[index].values())[0]
-                    self.train_data[index] = {llave_nueva: valores}
-
-                n = len(self.test_data)
-                for index in range(n):
-                    # Agrego los nuevos cortes de frames a los datos
-                    values = tuple(self.test_data[index].values())[0]
-
-                    for _ in range(n_veces):
-                        start_width = np.random.randint(0, original_width - self.frame_size[0])
-                        end_width = start_width + self.frame_size[0]
-                        start_height = np.random.randint(0, original_height - self.frame_size[1])
-                        end_height = start_height + self.frame_size[1]
-                        function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                        name = "icrop" + str(self.transformation_index)
-                        self.transformation_index += 1
-                        elemento = {(name, function): values}
-                        self.test_data.append(elemento)
-
-                    # Reemplazo la funcion de los datos ya almacenados
-                    llave_original = tuple(self.test_data[index].keys())[0]
-                    llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                    valores = tuple(self.test_data[index].values())[0]
-                    self.test_data[index] = {llave_nueva: valores}
-
-                if self.dev_path:
-                    n = len(self.dev_data)
-                    for index in range(n):
-                        # Agrego los nuevos cortes de frames a los datos
-                        values = tuple(self.dev_data[index].values())[0]
-
-                        for _ in range(n_veces):
-                            start_width = np.random.randint(0, original_width - self.frame_size[0])
-                            end_width = start_width + self.frame_size[0]
-                            start_height = np.random.randint(0, original_height - self.frame_size[1])
-                            end_height = start_height + self.frame_size[1]
-                            function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                            name = "icrop" + str(self.transformation_index)
-                            self.transformation_index += 1
-                            elemento = {(name, function): values}
-                            self.dev_data.append(elemento)
-
-                        # Reemplazo la funcion de los datos ya almacenados
-                        llave_original = tuple(self.dev_data[index].keys())[0]
-                        llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                        valores = tuple(self.dev_data[index].values())[0]
-                        self.dev_data[index] = {llave_nueva: valores}
-            else:
-                n = len(self.train_data)
-                new_train_data = []
-                for index in range(n):
-                    # Agrego los nuevos cortes de frames a los datos
-                    values = tuple(self.train_data[index].values())[0]
-
-                    for _ in range(n_veces):
-                        start_width = np.random.randint(0, original_width - self.frame_size[0])
-                        end_width = start_width + self.frame_size[0]
-                        start_height = np.random.randint(0, original_height - self.frame_size[1])
-                        end_height = start_height + self.frame_size[1]
-                        function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                        name = "icrop" + str(self.transformation_index)
-                        self.transformation_index += 1
-                        elemento = {(name, function): values}
-                        new_train_data.append(elemento)
-                self.train_data = new_train_data
-
-                n = len(self.test_data)
-                new_test_data = []
-                for index in range(n):
-                    # Agrego los nuevos cortes de frames a los datos
-                    values = tuple(self.test_data[index].values())[0]
-
-                    for _ in range(n_veces):
-                        start_width = np.random.randint(0, original_width - self.frame_size[0])
-                        end_width = start_width + self.frame_size[0]
-                        start_height = np.random.randint(0, original_height - self.frame_size[1])
-                        end_height = start_height + self.frame_size[1]
-                        function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                        name = "icrop" + str(self.transformation_index)
-                        self.transformation_index += 1
-                        elemento = {(name, function): values}
-                        new_test_data.append(elemento)
-                self.test_data = new_test_data
-
-                if self.dev_path:
-                    n = len(self.dev_data)
-                    new_dev_data = []
-                    for index in range(n):
-                        # Agrego los nuevos cortes de frames a los datos
-                        values = tuple(self.dev_data[index].values())[0]
-
-                        for _ in range(n_veces):
-                            start_width = np.random.randint(0, original_width - self.frame_size[0])
-                            end_width = start_width + self.frame_size[0]
-                            start_height = np.random.randint(0, original_height - self.frame_size[1])
-                            end_height = start_height + self.frame_size[1]
-                            function = lambda frame: frame[start_height: end_height, start_width: end_width]
-
-                            name = "icrop" + str(self.transformation_index)
-                            self.transformation_index += 1
-                            elemento = {(name, function): values}
-                            new_dev_data.append(elemento)
-                    self.dev_data = new_dev_data
+            self.random_frame_crop("train",conserve_original, n_veces)
+            self.random_frame_crop("test", conserve_original, n_veces)
+            self.random_frame_crop("dev", conserve_original, n_veces)
 
         elif mode == 'custom':
             """Metodo que se encarga de ejecutar la funcion customizada de corte 
             a cada frame de cada video."""
             if custom_fn:
-                if conserve_original:
-                    n = len(self.train_data)
-                    for index in range(n):
-                        #Arego lso nuevos cortes de franes a los datos
-                        values = tuple(self.train_data[index].values())[0]
-                        cortes = custom_fn(original_width, original_height)
-
-                        try:
-                            for corte in cortes:
-                                size_frame = (corte[1] - corte[0], corte[3] - corte[2])
-                                if size_frame[0] != self.frame_size[0] or size_frame[1] != self.frame_size[1]:
-                                    raise ValueError(
-                                        'El tamaño de los frames debe ser igual al tamaño '
-                                        'especificado por el usuario. Tamaño encontrado de '
-                                        '%s' % str(size_frame)
-                                    )
-                                function = lambda frame: frame[corte[2]: corte[3], corte[0]: corte[1]]
-                                name = "icrop" + str(self.transformation_index)
-                                self.transformation_index += 1
-                                elemento = { (name, function) : values }
-                                self.train_data.append(elemento)
-
-                        except:
-                            raise AttributeError(
-                                'Se espera que la funcion customizada retorne una matriz '
-                                'de forma que las filas es un corte a hacerle a cada video y '
-                                'las columnas sean 4 (inicio corte x, fin corte x, inicio corte '
-                                'y, fin corte y) exactamente en ese orden.'
-                            )
-                        # Reemplazo la funcion de los datos ya almacenados
-                        llave_original = tuple(self.train_data[index].keys())[0]
-                        llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                        self.train_data[index] = {llave_nueva: values}
-
-                    n = len(self.test_data)
-                    for index in range(n):
-                        # Arego lso nuevos cortes de franes a los datos
-                        values = tuple(self.test_data[index].values())[0]
-                        cortes = custom_fn(original_width, original_height)
-
-                        try:
-                            for corte in cortes:
-                                size_frame = (corte[1] - corte[0], corte[3] - corte[2])
-                                if size_frame[0] != self.frame_size[0] or size_frame[1] != self.frame_size[1]:
-                                    raise ValueError(
-                                        'El tamaño de los frames debe ser igual al tamaño '
-                                        'especificado por el usuario. Tamaño encontrado de '
-                                        '%s' % str(size_frame)
-                                    )
-                                function = lambda frame: frame[corte[2]: corte[3], corte[0]: corte[1]]
-                                name = "icrop" + str(self.transformation_index)
-                                self.transformation_index += 1
-                                elemento = {(name, function): values}
-                                self.test_data.append(elemento)
-
-                        except:
-                            raise AttributeError(
-                                'Se espera que la funcion customizada retorne una matriz '
-                                'de forma que las filas es un corte a hacerle a cada video y '
-                                'las columnas sean 4 (inicio corte x, fin corte x, inicio corte '
-                                'y, fin corte y) exactamente en ese orden.'
-                            )
-                        # Reemplazo la funcion de los datos ya almacenados
-                        llave_original = tuple(self.test_data[index].keys())[0]
-                        llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                        self.test_data[index] = {llave_nueva: values}
-
-                    if self.dev_path:
-                        n = len(self.dev_data)
-                        for index in range(n):
-                            # Arego lso nuevos cortes de franes a los datos
-                            values = tuple(self.dev_data[index].values())[0]
-                            cortes = custom_fn(original_width, original_height)
-
-                            try:
-                                for corte in cortes:
-                                    size_frame = (corte[1] - corte[0], corte[3] - corte[2])
-                                    if size_frame[0] != self.frame_size[0] or size_frame[1] != self.frame_size[1]:
-                                        raise ValueError(
-                                            'El tamaño de los frames debe ser igual al tamaño '
-                                            'especificado por el usuario. Tamaño encontrado de '
-                                            '%s' % str(size_frame)
-                                        )
-                                    function = lambda frame: frame[corte[2]: corte[3], corte[0]: corte[1]]
-                                    name = "icrop" + str(self.transformation_index)
-                                    self.transformation_index += 1
-                                    elemento = {(name, function): values}
-                                    self.dev_data.append(elemento)
-
-                            except:
-                                raise AttributeError(
-                                    'Se espera que la funcion customizada retorne una matriz '
-                                    'de forma que las filas es un corte a hacerle a cada video y '
-                                    'las columnas sean 4 (inicio corte x, fin corte x, inicio corte '
-                                    'y, fin corte y) exactamente en ese orden.'
-                                )
-                            # Reemplazo la funcion de los datos ya almacenados
-                            llave_original = tuple(self.dev_data[index].keys())[0]
-                            llave_nueva = (
-                            llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                            self.dev_data[index] = {llave_nueva: values}
-
-                else:
-                    n = len(self.train_data)
-                    new_train_data = []
-                    for index in range(n):
-                        # Reemplazo los nuevos cortes de frames a los datos
-                        values = tuple(self.train_data[index].values())[0]
-                        cortes = custom_fn(original_width, original_height)
-
-                        try:
-                            for corte in cortes:
-                                size_frame = (corte[1] - corte[0], corte[3] - corte[2])
-                                if size_frame[0] != self.frame_size[0] or size_frame[1] != self.frame_size[1]:
-                                    raise ValueError(
-                                        'El tamaño de los frames debe ser igual al tamaño '
-                                        'especificado por el usuario. Tamaño encontrado de '
-                                        '%s' % str(size_frame)
-                                    )
-                                function = lambda frame: frame[corte[2]: corte[3], corte[0]: corte[1]]
-                                name = "icrop" + str(self.transformation_index)
-                                self.transformation_index += 1
-                                elemento = {(name, function): values}
-                                new_train_data.append(elemento)
-
-                        except:
-                            raise AttributeError(
-                                'Se espera que la funcion customizada retorne una matriz '
-                                'de forma que las filas es un corte a hacerle a cada video y '
-                                'las columnas sean 4 (inicio corte x, fin corte x, inicio corte '
-                                'y, fin corte y) exactamente en ese orden.'
-                            )
-                    self.train_data = new_train_data
-
-                    n = len(self.test_data)
-                    new_test_data = []
-                    for index in range(n):
-                        # Reemplazo los nuevos cortes de frames a los datos
-                        values = tuple(self.test_data[index].values())[0]
-                        cortes = custom_fn(original_width, original_height)
-
-                        try:
-                            for corte in cortes:
-                                size_frame = (corte[1] - corte[0], corte[3] - corte[2])
-                                if size_frame[0] != self.frame_size[0] or size_frame[1] != self.frame_size[1]:
-                                    raise ValueError(
-                                        'El tamaño de los frames debe ser igual al tamaño '
-                                        'especificado por el usuario. Tamaño encontrado de '
-                                        '%s' % str(size_frame)
-                                    )
-                                function = lambda frame: frame[corte[2]: corte[3], corte[0]: corte[1]]
-                                name = "icrop" + str(self.transformation_index)
-                                self.transformation_index += 1
-                                elemento = {(name, function): values}
-                                new_test_data.append(elemento)
-
-                        except:
-                            raise AttributeError(
-                                'Se espera que la funcion customizada retorne una matriz '
-                                'de forma que las filas es un corte a hacerle a cada video y '
-                                'las columnas sean 4 (inicio corte x, fin corte x, inicio corte '
-                                'y, fin corte y) exactamente en ese orden.'
-                            )
-                    self.test_data = new_test_data
-
-                    if self.dev_path:
-                        n = len(self.dev_data)
-                        new_dev_data = []
-                        for index in range(n):
-                            # Reemplazo los nuevos cortes de frames a los datos
-                            values = tuple(self.dev_data[index].values())[0]
-                            cortes = custom_fn(original_width, original_height)
-
-                            try:
-                                for corte in cortes:
-                                    size_frame = (corte[1] - corte[0], corte[3] - corte[2])
-                                    if size_frame[0] != self.frame_size[0] or size_frame[1] != self.frame_size[1]:
-                                        raise ValueError(
-                                            'El tamaño de los frames debe ser igual al tamaño '
-                                            'especificado por el usuario. Tamaño encontrado de '
-                                            '%s' % str(size_frame)
-                                        )
-                                    function = lambda frame: frame[corte[2]: corte[3], corte[0]: corte[1]]
-                                    name = "icrop" + str(self.transformation_index)
-                                    self.transformation_index += 1
-                                    elemento = {(name, function): values}
-                                    new_dev_data.append(elemento)
-
-                            except:
-                                raise AttributeError(
-                                    'Se espera que la funcion customizada retorne una matriz '
-                                    'de forma que las filas es un corte a hacerle a cada video y '
-                                    'las columnas sean 4 (inicio corte x, fin corte x, inicio corte '
-                                    'y, fin corte y) exactamente en ese orden.'
-                                )
-                        self.dev_data = new_dev_data
-
+                self.custom_frame_crop("train", conserve_original, custom_fn)
+                self.custom_frame_crop("test", conserve_original, custom_fn)
+                self.custom_frame_crop("dev", conserve_original, custom_fn)
             else:
                 raise ValueError('Debe pasar la funcion customizada para el '
                     'modo customizado, de lo contrario no podra usarlo. Tipo de dato'
@@ -1084,21 +824,6 @@ class VideoDataGenerator():
 
         else:
             """Modo None, donde simplemente se redimensiona toda la imagen"""
-            for index in range(len(self.train_data)):
-                llave_original = tuple(self.train_data[index].keys())[0]
-                llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                valores = tuple(self.train_data[index].values())[0]
-                self.train_data[index] = {llave_nueva: valores}
-
-            for index in range(len(self.test_data)):
-                llave_original = tuple(self.test_data[index].keys())[0]
-                llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                valores = tuple(self.test_data[index].values())[0]
-                self.test_data[index] = {llave_nueva: valores}
-
-            if self.dev_path:
-                for index in range(len(self.dev_data)):
-                    llave_original = tuple(self.dev_data[index].keys())[0]
-                    llave_nueva = (llave_original[0] + "icrop" + str(self.transformation_index), self.resize_frame)
-                    valores = tuple(self.dev_data[index].values())[0]
-                    self.dev_data[index] = {llave_nueva: valores}
+            self.none_frame_crop("train")
+            self.none_frame_crop("test")
+            self.none_frame_crop("dev")
