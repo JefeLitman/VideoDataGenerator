@@ -168,14 +168,14 @@ class VideoDataGenerator():
         if residuo != 0:
             self.train_batches += 1
             random_index = np.random.randint(0, len(self.train_data) - self.batch_size)
-            self.train_data +=  self.train_data[random_index:self.batch_size - residuo]
+            self.train_data +=  self.train_data[random_index:random_index + self.batch_size - residuo]
         
         self.test_batches = int( len(self.test_data) /  self.batch_size)
         residuo = len(self.test_data) % self.batch_size
         if residuo != 0:
             self.test_batches += 1
             random_index = np.random.randint(0, len(self.test_data) - self.batch_size)
-            self.test_data +=   self.test_data[random_index:self.batch_size - residuo]
+            self.test_data +=   self.test_data[random_index:random_index + self.batch_size - residuo]
         
         if self.dev_path:
             self.dev_batches = int( len(self.dev_data) / self.batch_size)
@@ -183,7 +183,7 @@ class VideoDataGenerator():
             if residuo != 0:
                 self.dev_batches += 1
                 random_index = np.random.randint(0, len(self.dev_data) - self.batch_size)
-                self.dev_data += self.dev_data[random_index:self.batch_size - residuo]
+                self.dev_data += self.dev_data[random_index:random_index + self.batch_size - residuo]
 
     def shuffle_videos(self):
         """Metodo que se encarga de realizar shuffle a los datos si esta
@@ -617,11 +617,11 @@ class VideoDataGenerator():
                     name = "icrop" + str(self.transformation_index)
                     self.transformation_index += 1
                     elemento = {(name, function): values}
-                    if new_lista:
+                    if new_lista == []:
                         new_lista.append(elemento)
                     else:
                         lista.append(elemento)
-        if new_lista:
+        if new_lista == []:
             if list_name == 'train':
                 self.train_data = new_lista
             elif list_name == 'test':
@@ -672,11 +672,11 @@ class VideoDataGenerator():
                 name = "icrop" + str(self.transformation_index)
                 self.transformation_index += 1
                 elemento = {(name, function): values}
-                if new_lista:
+                if new_lista == []:
                     new_lista.append(elemento)
                 else:
                     lista.append(elemento)
-        if new_lista:
+        if new_lista == []:
             if list_name == 'train':
                 self.train_data = new_lista
             elif list_name == 'test':
@@ -731,7 +731,7 @@ class VideoDataGenerator():
                     name = "icrop" + str(self.transformation_index)
                     self.transformation_index += 1
                     elemento = {(name, function): values}
-                    if new_lista:
+                    if new_lista == []:
                         new_lista.append(elemento)
                     else:
                         lista.append(elemento)
@@ -743,7 +743,7 @@ class VideoDataGenerator():
                     'las columnas sean 4 (inicio corte x, fin corte x, inicio corte '
                     'y, fin corte y) exactamente en ese orden.'
                 )
-        if new_lista:
+        if new_lista == []:
             if list_name == 'train':
                 self.train_data = new_lista
             elif list_name == 'test':
@@ -792,7 +792,8 @@ class VideoDataGenerator():
              le permita"""
             self.sequential_frame_crop("train",conserve_original)
             self.sequential_frame_crop("test", conserve_original)
-            self.sequential_frame_crop("dev", conserve_original)
+            if self.dev_path:
+                self.sequential_frame_crop("dev", conserve_original)
 
         elif mode == 'random':
             """Modo aleatorio, donde la funcion personalizada corresponde al numero 
@@ -808,7 +809,8 @@ class VideoDataGenerator():
                 )
             self.random_frame_crop("train",conserve_original, n_veces)
             self.random_frame_crop("test", conserve_original, n_veces)
-            self.random_frame_crop("dev", conserve_original, n_veces)
+            if self.dev_path:
+                self.random_frame_crop("dev", conserve_original, n_veces)
 
         elif mode == 'custom':
             """Metodo que se encarga de ejecutar la funcion customizada de corte 
@@ -816,7 +818,8 @@ class VideoDataGenerator():
             if custom_fn:
                 self.custom_frame_crop("train", conserve_original, custom_fn)
                 self.custom_frame_crop("test", conserve_original, custom_fn)
-                self.custom_frame_crop("dev", conserve_original, custom_fn)
+                if self.dev_path:
+                    self.custom_frame_crop("dev", conserve_original, custom_fn)
             else:
                 raise ValueError('Debe pasar la funcion customizada para el '
                     'modo customizado, de lo contrario no podra usarlo. Tipo de dato'
@@ -826,4 +829,5 @@ class VideoDataGenerator():
             """Modo None, donde simplemente se redimensiona toda la imagen"""
             self.none_frame_crop("train")
             self.none_frame_crop("test")
-            self.none_frame_crop("dev")
+            if self.dev_path:
+                self.none_frame_crop("dev")
