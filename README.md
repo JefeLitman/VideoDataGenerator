@@ -6,18 +6,26 @@ in a folder and load sequentially from it.
 the notation of channels in the last dimension. NFHWC (N - Batch, F - Frames, 
 H - Height, W - Widht and C - Channels). 
 
-**Actual version: v1.8**
+**Actual version: v1.9**
 
 - Features:
-    - Work with the API of tensorflow `keras.model.fit_generator`.
+    - Deleted the option to work with video files (*avi, *.mp4, etc). The reason is
+    given by the performance, when we use files or a mix of files and folders we 
+    need to add an extra work that slow substantial the process of training.
+    - Work with the API of tensorflow `keras.model.fit_generator` and actually
+    the API apply parallelism in the generator so It's not necessary parallelize 
+    `VideoDataGenerator`.
+    - Fixed a bug with the folder dev, when creating the object this folder is ignored.
+    - Fixed a bug in sequentia, random and custom frame crop by a infinite loop 
+    when the option of `conserve_original` is True.
+    - Added a file `main.py` that is a tutorial of how to use custom functions.
+    - Option to establish `video_frames` in `None` and all the videos will have the same length 
+    given by the video with the minimum frames in train, test or dev.
     
 - Future features:
     - Add `video_transformation`.
-    - Do all the heavy task in parallel with threads and multiprocessors.
     - Do the `video_transformation` in parallel 
     with threads and multiprocessors.
-    - Option to establish `video_frames` in `None` and all the videos will have the same length 
-    given by the video with the minimum frames.
 
 # Documentation
 
@@ -40,17 +48,14 @@ order to `VideoDataGenerator` works:
         - Classes (In folder)
             - Videos (In folders)
                 - Frames (Files in jpg, png, tiff or ppm)
-            - Videos (In avi or mp4) **Future release**
     - test
         - Classes (In folder)
             - Videos (In folders)
                 - Frames (Files in jpg, png, tiff or ppm)
-            - Videos (In avi or mp4) **Future release**
     - dev
         - Classes (In folder)
             - Videos (In folders)
                 - Frames (Files in jpg, png, tiff or ppm)
-            - Videos (In avi or mp4) **Future release**
                 
 If you see, yes... Only accepts the folders of train, test and dev data (Dev is 
 optional but train and test are required) so order you dataset and enjoy 
@@ -72,7 +77,7 @@ size in a tuple like `(width, height)`.
 - `frame_size`: Default None, it specifies the final image size to return
 after applying transformations. None means the original size and you must pass the
 size in a tuple like `(width, height)`.
-- `video_frames`: Default 16, it specifies the final video frames to return.
+- `video_frames`: Default None, it specifies the final video frames to return.
 - `temporal_crop`: Default is `(None, None)`, it specifies what type of operation 
 over the temporal axis must be done. For more information read the below section.
 - `video_transformation`: Default None, it specifies what transformation 
@@ -134,18 +139,17 @@ specified:
 
 **Basic parameters**
 
-1. An important consideration is that all the dataset must have the same size
-otherwise `VideoDataGenerator` will assume that all your dataset have an 
-original size of the first frame in the first video of training data.
+1. An important consideration is that all the dataset videos must have the same 
+size (width and height) otherwise `VideoDataGenerator` will assume that all your 
+dataset have an original size of the first frame in the first video of training videos. 
 
-2. In the structure of the dataset all the videos must be folders or files 
-but no a mix of both. In a future release it will work with both at the same time.
+2. In the structure of the dataset all the videos must be folders.
 
 1. `original_frame_size`:  This parameter is fundamental when you have to 
 start with an original frame size of videos. For example you use it commonly
 when have to replicate experiments. If you doesn't specified this parameter
 then `VideoDataGenerator` will take the frame size of the first frame in
-the first video to be the original size.
+the first video of training videos to be the original size.
 
 1. `conserve_original`: When you apply transformation, generally, is in order to
 increase the dataset but sometimes you need to transform completely your data
@@ -155,7 +159,6 @@ the transformation that you need (of course if you select `'sequential'` to
 transform the data it won't apply twice) and for this data the `frame_crop` 
 option will be `None` so the frame size will be resized to the `frame_size`
 specified by the user.
-
 
 **Temporal crop**
 
@@ -225,7 +228,7 @@ crops to apply. (The image below is the example with 3 random crops).
 
 - **`custom`:** Another powerful option in `VideoDataGenerator`because you have to 
 pass as parameter a callback of a function that you made to apply the frame crop. The 
-structure of the function is the following:
+structure of the function is the following (Note tha x refers to the width and y to the height):
 
 ![custom_crop](img/custom_frame_crop.png)
 

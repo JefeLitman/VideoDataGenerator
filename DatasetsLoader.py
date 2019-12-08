@@ -1,5 +1,6 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
 You can use it in your own and only have two dependencies with opencv and numpy.
+Version: 1.9.0
 """
 
 import os
@@ -18,7 +19,7 @@ class VideoDataGenerator():
                  batch_size = 32,
                  original_frame_size = None,
                  frame_size = None,
-                 video_frames = 16,
+                 video_frames = None,
                  temporal_crop = (None, None),
                  frame_crop = (None, None),
                  shuffle = False,
@@ -57,7 +58,6 @@ class VideoDataGenerator():
 
         self.ds_directory = directory_path
         self.batch_size = batch_size
-        self.video_frames = video_frames
         self.transformation_index = 0
         self.dev_path = None
         self.dev_data = None
@@ -121,6 +121,26 @@ class VideoDataGenerator():
                                  'frames ya que el tamaño de salida ({w}, {h}) es mayor al original y '
                                  'los datos originales no seran salvados por lo que tendra todos los datos vacios.'.format(w = self.frame_size[0],
                                                                                                                h = self.frame_size[1]))
+
+        """Proceso de establecer el valor de video frames si se establecio en None con los minimos frames de todos los videos"""
+        if video_frames:
+            self.video_frames = video_frames
+        else:
+            minimo = len(os.listdir(self.videos_train_path[0]))
+            for video in self.videos_train_path:
+                nro_frames = len(os.listdir(video))
+                if nro_frames < minimo:
+                    minimo = nro_frames
+            for video in self.videos_test_path:
+                nro_frames = len(os.listdir(video))
+                if nro_frames < minimo:
+                    minimo = nro_frames
+            if self.dev_path:
+                for video in self.videos_dev_path:
+                    nro_frames = len(os.listdir(video))
+                    if nro_frames < minimo:
+                        minimo = nro_frames
+            self.video_frames = minimo
 
         """Proceso de generar los datos con o sin transformaciones"""
         if conserve_original and temporal_crop[0] not in (None, 'sequential'):
