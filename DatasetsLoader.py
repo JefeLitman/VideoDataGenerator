@@ -59,6 +59,8 @@ class VideoDataGenerator():
         self.batch_size = batch_size
         self.video_frames = video_frames
         self.transformation_index = 0
+        self.dev_path = None
+        self.dev_data = None
 
         """Proceso de revisar que los directorios del path esten en la jerarquia correcta"""
         directories = os.listdir(self.ds_directory)
@@ -67,23 +69,19 @@ class VideoDataGenerator():
                 self.train_path = os.path.join(self.ds_directory,i)
                 self.train_batch_index = 0
                 self.train_data = []
-                self.dev_path = None
-                self.dev_data = None
             elif i.lower() == "test":
                 self.test_path = os.path.join(self.ds_directory,i)
                 self.test_batch_index = 0
                 self.test_data = []
-                self.dev_path = None
-                self.dev_data = None
             elif i.lower() == "dev":
                 self.dev_path = os.path.join(self.ds_directory,i)
                 self.dev_batch_index = 0
                 self.dev_data = []
             else:
                 raise ValueError(
-                    'La organizacion de la carpeta debe seguir la estructura'
-                    'de train, test y dev (este ultimo opcional) teniendo'
-                    'los mismos nombres sin importar mayus o minus.'
+                    'La organizacion de la carpeta debe seguir la estructura '
+                    'de train, test y dev (este ultimo opcional) teniendo '
+                    'los mismos nombres sin importar mayus o minus. '
                     'Carpeta del error: %s' % i)
 
         """Proceso de revisar que las transformaciones escojidas son validas"""
@@ -596,11 +594,8 @@ class VideoDataGenerator():
                              'y dev. Modo pasado: {i}'.format(i=list_name))
         original_height = self.original_size[1]
         original_width = self.original_size[0]
-        if conserve:
-            self.none_frame_crop(list_name)
-            new_lista = None
-        else:
-            new_lista = []
+        new_lista = []
+
         for video in lista:
             # Agrego los nuevos cortes de frames a los datos
             values = tuple(video.values())[0]
@@ -617,11 +612,17 @@ class VideoDataGenerator():
                     name = "icrop" + str(self.transformation_index)
                     self.transformation_index += 1
                     elemento = {(name, function): values}
-                    if new_lista == []:
-                        new_lista.append(elemento)
-                    else:
-                        lista.append(elemento)
-        if new_lista == []:
+                    new_lista.append(elemento)
+
+        if conserve:
+            self.none_frame_crop(list_name)
+            if list_name == 'train':
+                self.train_data += new_lista
+            elif list_name == 'test':
+                self.test_data += new_lista
+            elif list_name == 'dev':
+                self.dev_data += new_lista
+        else:
             if list_name == 'train':
                 self.train_data = new_lista
             elif list_name == 'test':
@@ -653,11 +654,8 @@ class VideoDataGenerator():
                              'y dev. Modo pasado: {i}'.format(i=list_name))
         original_height = self.original_size[1]
         original_width = self.original_size[0]
-        if conserve:
-            self.none_frame_crop(list_name)
-            new_lista = None
-        else:
-            new_lista = []
+        new_lista = []
+
         for video in lista:
             # Agrego los nuevos cortes de frames a los datos
             values = tuple(video.values())[0]
@@ -672,11 +670,17 @@ class VideoDataGenerator():
                 name = "icrop" + str(self.transformation_index)
                 self.transformation_index += 1
                 elemento = {(name, function): values}
-                if new_lista == []:
-                    new_lista.append(elemento)
-                else:
-                    lista.append(elemento)
-        if new_lista == []:
+                new_lista.append(elemento)
+
+        if conserve:
+            self.none_frame_crop(list_name)
+            if list_name == 'train':
+                self.train_data += new_lista
+            elif list_name == 'test':
+                self.test_data += new_lista
+            elif list_name == 'dev':
+                self.dev_data += new_lista
+        else:
             if list_name == 'train':
                 self.train_data = new_lista
             elif list_name == 'test':
@@ -708,11 +712,8 @@ class VideoDataGenerator():
                              'y dev. Modo pasado: {i}'.format(i=list_name))
         original_height = self.original_size[1]
         original_width = self.original_size[0]
-        if conserve:
-            self.none_frame_crop(list_name)
-            new_lista = None
-        else:
-            new_lista = []
+        new_lista = []
+
         for video in lista:
             # Agrego los nuevos cortes de frames a los datos
             values = tuple(video.values())[0]
@@ -731,10 +732,7 @@ class VideoDataGenerator():
                     name = "icrop" + str(self.transformation_index)
                     self.transformation_index += 1
                     elemento = {(name, function): values}
-                    if new_lista == []:
-                        new_lista.append(elemento)
-                    else:
-                        lista.append(elemento)
+                    new_lista.append(elemento)
 
             except:
                 raise AttributeError(
@@ -743,7 +741,15 @@ class VideoDataGenerator():
                     'las columnas sean 4 (inicio corte x, fin corte x, inicio corte '
                     'y, fin corte y) exactamente en ese orden.'
                 )
-        if new_lista == []:
+        if conserve:
+            self.none_frame_crop(list_name)
+            if list_name == 'train':
+                self.train_data += new_lista
+            elif list_name == 'test':
+                self.test_data += new_lista
+            elif list_name == 'dev':
+                self.dev_data += new_lista
+        else:
             if list_name == 'train':
                 self.train_data = new_lista
             elif list_name == 'test':
@@ -790,7 +796,7 @@ class VideoDataGenerator():
             """Modo secuencial, donde se toman por cada imagen (desde izq a der)
              y arriba hacia abajo el tamaño indicado porel usuario hasta donde se
              le permita"""
-            self.sequential_frame_crop("train",conserve_original)
+            self.sequential_frame_crop("train", conserve_original)
             self.sequential_frame_crop("test", conserve_original)
             if self.dev_path:
                 self.sequential_frame_crop("dev", conserve_original)
