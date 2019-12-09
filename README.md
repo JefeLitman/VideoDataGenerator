@@ -1,5 +1,5 @@
 # <u>VideoDataGenerator</u>: A easy data tool for machine learning with videos
-This option is similar to the keras.ImageDataGenerator how take the data
+This option is similar to the keras.ImageDataGenerator in how its take the data
 in a folder and load sequentially from it.
 
 **Important:** For the moment the VideoDataGenerator works only with 
@@ -16,7 +16,7 @@ H - Height, W - Widht and C - Channels).
     the API apply parallelism in the generator so It's not necessary parallelize 
     `VideoDataGenerator`.
     - Fixed a bug with the folder dev, when creating the object this folder is ignored.
-    - Fixed a bug in sequentia, random and custom frame crop by a infinite loop 
+    - Fixed a bug in sequential, random and custom frame crop by a infinite loop 
     when the option of `conserve_original` is True.
     - Added a file `main.py` that is a tutorial of how to use custom functions.
     - Option to establish `video_frames` in `None` and all the videos will have the same length 
@@ -60,9 +60,6 @@ order to `VideoDataGenerator` works:
 If you see, yes... Only accepts the folders of train, test and dev data (Dev is 
 optional but train and test are required) so order you dataset and enjoy 
 this tool for your projects.
-
-**In a future it will implement a method to read the avi files to avoid the 
-process of splitting the frames of the videos**
 
 ### How to use it?
 
