@@ -6,14 +6,14 @@ in a folder and load sequentially from it.
 the notation of channels in the last dimension. NFHWC (N - Batch, F - Frames, 
 H - Height, W - Widht and C - Channels). 
 
-**Actual version: v1.9**
+**Actual version: v1.9.1**
 
 - Features:
     - Deleted the option to work with video files (*avi, *.mp4, etc). The reason is
     given by the performance, when we use files or a mix of files and folders we 
     need to add an extra work that slow substantial the process of training.
     - Work with the API of tensorflow `keras.model.fit_generator` and actually
-    the API apply parallelism in the generator so It's not necessary parallelize 
+    the API apply parallelism in the generator with num_workers so It's not necessary parallelize 
     `VideoDataGenerator`.
     - Fixed a bug with the folder dev, when creating the object this folder is ignored.
     - Fixed a bug in sequential, random and custom frame crop by a infinite loop 
@@ -21,6 +21,8 @@ H - Height, W - Widht and C - Channels).
     - Added a file `main.py` that is a tutorial of how to use custom functions.
     - Option to establish `video_frames` in `None` and all the videos will have the same length 
     given by the video with the minimum frames in train, test or dev.
+    - Fixed a bug with  `custom_temporal_crop` when try to load a video with less frames 
+    that specified by the user and the method didn´t autocomplete the frames.
     
 - Future features:
     - Add `video_transformation`.

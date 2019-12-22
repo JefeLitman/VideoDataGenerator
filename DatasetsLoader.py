@@ -1,6 +1,6 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
 You can use it in your own and only have two dependencies with opencv and numpy.
-Version: 1.9.0
+Version: 1.9.1
 """
 
 import os
@@ -456,6 +456,8 @@ class VideoDataGenerator():
                              'a lo que es un string. Instancia pasada: {i}'.format(i=type(video_path)))
         video = video_path
         frames_path = [os.path.join(video, frame) for frame in sorted(os.listdir(video))]
+        while len(frames_path) < self.video_frames:
+            frames_path += frames_path[:self.video_frames - len(frames_path)]
         try:
             frames = custom_fn(frames_path)
             label = self.to_number[video.split("/")[-2].lower()]
