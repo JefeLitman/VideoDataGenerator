@@ -1,6 +1,6 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
 You can use it in your own and only have two dependencies with opencv and numpy.
-Version: 2.0
+Version: 2.0.1
 """
 
 import os
@@ -265,6 +265,9 @@ class VideoDataGenerator():
                     'de python que reciba unicamente el video y retorna el video ya '
                     'transformado con las dimensiones especificadas en los atributos.'
                 )
+        else:
+            if channels == 1:
+                video = video.reshape((self.video_frames,self.frame_size[1], self.frame_size[0],1))
         return video
 
     def get_next_train_batch(self, n_canales = 3):
