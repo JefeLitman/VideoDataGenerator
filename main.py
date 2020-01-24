@@ -16,6 +16,9 @@ def custom_frame_crop(original_width, original_height):
             [112,224,112,224]
             ]
 
+def example_video_transformation(video):
+    pass
+
 dataset = VideoDataGenerator(directory_path = root_path,
                              batch_size = batch_size,
                              original_frame_size = original_size,

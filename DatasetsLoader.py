@@ -1,6 +1,6 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
 You can use it in your own and only have two dependencies with opencv and numpy.
-Version: 1.9.1
+Version: 2.0
 """
 
 import os
@@ -16,11 +16,12 @@ class VideoDataGenerator():
     """
 
     def __init__(self,directory_path,
-                 batch_size = 32,
+                 batch_size = None,
                  original_frame_size = None,
                  frame_size = None,
                  video_frames = None,
                  temporal_crop = (None, None),
+                 video_transformation = None,
                  frame_crop = (None, None),
                  shuffle = False,
                  conserve_original = False
@@ -29,8 +30,9 @@ class VideoDataGenerator():
         Args:
             directory_path: String que tiene la ruta absoluta de la ubicacion del
                                        dataset, incluyendo en el path el split. Obligatorio.
-            batch_size: Numero que corresponde al tamaño de elementos por batch.
-                                Por defecto en 32.
+            batch_size: Numero que corresponde al tamaño de elementos por batch. Cuando sea None va tomar
+                                como batch, el tamaño de la menor cantidad de datos del dataset o si la menor cantidad
+                                es mayor que 32 se pondra si esta en None. Por defecto en None.
             original_frame_size: Tupla de enteros del tamaño de imagen original a cargar con la estructura (width, height).
                                                 Por defecto en None y tomara el tamaño original de las imagenes.
             frame_size: Tupla de enteros del tamaña final de imagen que quedara con la estructura (width, height).
@@ -40,6 +42,8 @@ class VideoDataGenerator():
             temporal_crop: Tupla de la forma (Modo, funcion customizada o callback)
                                     de python e indica que tipo de corte temporal se hara sobre los videos.
                                     Por defecto en (None, None).
+            video_transformation: Callback de python que permite realizar cualquier tipo de transformacion
+                                                sobre el video despues de haber sido cargado. Por defecto en None.
             frame_crop: Tupla de la forma (Modo, funcion customizada o callback)
                                  de python e indica el tipo de corte para cada frame de cada video
                                 que se hara sobre los videos. Por defecto en (None, None).
@@ -57,7 +61,7 @@ class VideoDataGenerator():
         frame_crop_modes = (None,'sequential','random','custom')
 
         self.ds_directory = directory_path
-        self.batch_size = batch_size
+        self.video_transformation = video_transformation
         self.transformation_index = 0
         self.dev_path = None
         self.dev_data = None
@@ -101,6 +105,20 @@ class VideoDataGenerator():
         """Proceso de generar los path de los videos para la verificacion subsiguiente de parametros"""
         self.generate_classes()
         self.generate_videos_paths()
+
+        """Proceso de definir el tamaño de batch si fue especificado como None"""
+        if batch_size:
+            self.batch_size = batch_size
+        else:
+            minimo = 32
+            if len(self.videos_train_path) < minimo:
+                minimo = len(self.videos_train_path)
+            elif len(self.videos_test_path) < minimo:
+                minimo = len(self.videos_test_path)
+            else:
+                if self.dev_path:
+                    minimo = len(self.videos_dev_path)
+            self.batch_size = minimo
 
         """Proceso de definir el tamaño original de todas las imagenes si no se entrega
         el parametro de original size y establecer el tamaño de los frames"""
@@ -229,10 +247,25 @@ class VideoDataGenerator():
             image = function(image)
             video.append(image)
 
-        if channels == 1:
-            return np.asarray(video, dtype=np.float32).reshape((self.video_frames,self.frame_size[1], self.frame_size[0],1))
-        else:
-            return np.asarray(video, dtype=np.float32)
+        video = np.asarray(video, dtype=np.float32)
+        if self.video_transformation:
+            try:
+                if channels == 1:
+                    video = self.video_transformation(video.reshape((self.video_frames,self.frame_size[1], self.frame_size[0],1)))
+                else:
+                    video = self.video_transformation(video)
+                if video.shape != (self.video_frames, self.frame_size[1], self.frame_size[0], channels):
+                    raise AssertionError('La funcion pasada a video_transformation no retorna las dimensiones '
+                                         'esperadas que deberia tener el video. Dimension de video: '+str(video.shape)+
+                                         ' Dimensiones que deberia tener: ' + str((self.video_frames, self.frame_size[1], self.frame_size[0], channels))
+                    )
+            except:
+                raise AttributeError(
+                    'Se espera que el parametro video_tranformation sea un callback '
+                    'de python que reciba unicamente el video y retorna el video ya '
+                    'transformado con las dimensiones especificadas en los atributos.'
+                )
+        return video
 
     def get_next_train_batch(self, n_canales = 3):
         """Metodo que se encarga de retornar el siguiente batch o primer batch
@@ -419,13 +452,9 @@ class VideoDataGenerator():
         label = self.to_number[video.split("/")[-2].lower()]
 
         for _ in range(n_veces):
-            start = np.random.randint(0, len(frames_path))
-            if start + self.video_frames > len(frames_path):
-                end = self.video_frames + start - len(frames_path)
-                frames = frames_path[start:] + frames_path[: end]
-            else:
-                end = start + self.video_frames
-                frames = frames_path[start: end]
+            start = np.random.randint(0, len(frames_path)-self.video_frames)
+            end = start + self.video_frames
+            frames = frames_path[start: end]
 
             name = "tcrop" + str(self.transformation_index)
             elemento = {(name, None): (frames, label)}

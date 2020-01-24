@@ -2,32 +2,25 @@
 This option is similar to the keras.ImageDataGenerator in how its take the data
 in a folder and load sequentially from it.
 
-**Important:** For the moment the VideoDataGenerator works only with 
+**Important:** The VideoDataGenerator works only with 
 the notation of channels in the last dimension. NFHWC (N - Batch, F - Frames, 
-H - Height, W - Widht and C - Channels). 
+H - Height, W - Width and C - Channels). 
 
-**Actual version: v1.9.1**
+**Actual version: v2.0**
 
 - Features:
-    - Deleted the option to work with video files (*avi, *.mp4, etc). The reason is
-    given by the performance, when we use files or a mix of files and folders we 
-    need to add an extra work that slow substantial the process of training.
-    - Work with the API of tensorflow `keras.model.fit_generator` and actually
-    the API apply parallelism in the generator with num_workers so It's not necessary parallelize 
-    `VideoDataGenerator`.
-    - Fixed a bug with the folder dev, when creating the object this folder is ignored.
-    - Fixed a bug in sequential, random and custom frame crop by a infinite loop 
-    when the option of `conserve_original` is True.
-    - Added a file `main.py` that is a tutorial of how to use custom functions.
-    - Option to establish `video_frames` in `None` and all the videos will have the same length 
-    given by the video with the minimum frames in train, test or dev.
-    - Fixed a bug with  `custom_temporal_crop` when try to load a video with less frames 
-    that specified by the user and the method didn´t autocomplete the frames.
+    - Added `video_transformation` method that modifies the video before its 
+    returned by `VideoDataGenerator` for any code make by you under some constraint. 
+    Read the constraint below.
+    - Added an example of how to use `video_transformation` in _main.py_.
+    - Modified the option of `batch_size` to None. When None is passed `VideoDataGenerator`
+    will take the minimum video files of train. test or dev but if exist less than 32 
+    videos, otherwise `batch_size ` will be 32.
+    - Modified the behavior of mode random in `temporal_crop` now it takes random 
+    frames between the video and not concatenate the beginning with the end of the video.
     
 - Future features:
-    - Add `video_transformation`.
-    - Do the `video_transformation` in parallel 
-    with threads and multiprocessors.
+    - Any ideas? Contribute now!
 
 # Documentation
 
@@ -81,7 +74,6 @@ size in a tuple like `(width, height)`.
 over the temporal axis must be done. For more information read the below section.
 - `video_transformation`: Default None, it specifies what transformation 
 must be done over the video after loaded. For more information read the below section.
-**Future release**
 - `frame_crop`: Default is (None, None), it specifies what type of operation 
 over the spatial axis must be done. For more information read the below section.
 - `shuffle`: Default False, Boolean that specifies if the data must be shuffle 
@@ -107,6 +99,10 @@ The following attributes and methods are public and the principal core to use
     - `VideoDataGenerator.dev_batch_index`: The index or position at what
     batch the object is in the dev data.
 - **Methods**
+    - `VideoDataGenerator.to_class`: Vector of classes of `VideoDataGenerator` and 
+    you can access to the name of a class by its index or class number.
+    - `VideoDataGenerator.to_number`: Dictionary of classes of `VideoDataGenerator` and 
+    you can access to the number of a class by its name in lowercase.
     - `VideoDataGenerator.get_next_train_batch(n_canales = 3)`: Method that return
     a tuple in the order (batch, labels) of the train data. The parameter n_canales
     specifies how many channels you want to upload your frames (Default to 3).
@@ -134,7 +130,7 @@ The following order is how the `VideoDataGenerator` applies the transformations
 specified:
 1. Temporal crop
 2. Frame crop
-3. Video transformation (Not yet)
+3. Video transformation 
 
 **Basic parameters**
 
@@ -164,6 +160,14 @@ specified by the user.
 Temporal crop work in the time axis of a video performing 4 types of operations.
 To select the type of operation you must do it in a tuple `(type, additional_parameter)`.
 The types of transformations (You must type exactly at here is) and its parameters are:
+
+<u>Important note:</u> If a video have less frames that the frames required then it will be completed by adding the 
+initial frames to complete the required, for example if `video_frames` is 10 and the video have 
+5 frames then `VideoDataGenerator` will add the firsts frames that need to complete 10 frames 
+(Yes... it can be added twice if the frames required are 15) in all temporal crops.
+
+![](img/autocompleting_frames.png)
+
 - **`None`:** When you establish this option `VideoDataGenerator` will take only the first 
 frames of all videos by the option `video_frames`. It doesn't require parameter so you can
 pass `None`.
@@ -174,19 +178,9 @@ each one and the last frame will be ignored.
 
 ![](img/seq_temp_crop.png)
 
-If a video have less frames that the frames required then it will be completed by adding the 
-initial frames to complete the required, for example if `video_frames` is 10 and the video have 
-5 frames then `VideoDataGenerator` will add the firsts frames that need to complete 10 frames 
-(Yes... it can be added twice if the frames required are 15).
-
-![](img/autocompleting_frames.png)
-
 It doesn't require parameter so you can pass `None`.
 - **`'random'`:** Yeah, it as simple as it sound, this parameter make random temporal
-crops but the temporal crops can happen between the start and end of the frames, for
-example if `video_frames` are 4 and a temporal crop select the final 2 frames, then
-`VideoDataGenerator` will add the first 2 frames of the video to complete the 4 frames.
-In other words the crops are continuous in the temporal axis. The additional parameter must
+crops between the start and end of the frames. The additional parameter must
 be an Integer who define the number of random crops to apply (The image below is the example
 with 2 random crops).
 
@@ -238,7 +232,7 @@ a numpy array of the frame (loaded) and return a python list of list (matrix).
 
 **Video transformation**
 
-In construction
+In construction (almost done)
 
 ### Do you want to contribute?
 - **Core explanation**
