@@ -30,8 +30,8 @@ Just copy the file in your project and import the class..
 `from DatasetsLoader import VideoDataGenerator`
 
 ### Dependecies
-This file have only two dependecies, the opencv library (Only use imread, 
-cvtColor and resize) and the numpy library. It doesn't matter the version so relax and install 
+This file have only three dependecies, the opencv library (Only use imread, 
+cvtColor and resize), numpy library and pandas. It doesn't matter the version so relax and install 
 whatever you want ;)
 
 ### Dataset Structure

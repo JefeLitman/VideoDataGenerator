@@ -1,11 +1,12 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
 You can use it in your own and only have two dependencies with opencv and numpy.
-Version: 2.0.1
+Version: 2.1
 """
 
 import os
 import cv2
 import numpy as np
+import pandas as pd
 
 class VideoDataGenerator():
     """Clase para cargar todos los datos de un Dataset a partir de la ruta
@@ -15,7 +16,9 @@ class VideoDataGenerator():
     En esta version lee los datos a partir de los frames pero no archivos avi.
     """
 
-    def __init__(self,directory_path,
+    def __init__(self,
+                 directory_path = None,
+                 table_paths = None,
                  batch_size = None,
                  original_frame_size = None,
                  frame_size = None,
@@ -29,7 +32,11 @@ class VideoDataGenerator():
         """Constructor de la clase.
         Args:
             directory_path: String que tiene la ruta absoluta de la ubicacion del
-                                       dataset, incluyendo en el path el split. Obligatorio.
+                                       dataset, incluyendo en el path el split. Obligatorio si no se
+                                       usa el parametro de table_paths.
+            table_paths: Pandas Dataframe, numpy array o python matrix con forma (nro_videos, 3) donde las
+                                          columnas son (path_video, tipo_video, clase o etiqueta) y tipo de video puede ser
+                                          "train", "test" o "dev" unicamente. Obligatorio si no se usa el parametro directory_path
             batch_size: Numero que corresponde al tamaño de elementos por batch. Cuando sea None va tomar
                                 como batch, el tamaño de la menor cantidad de datos del dataset o si la menor cantidad
                                 es mayor que 32 se pondra si esta en None. Por defecto en None.
@@ -60,33 +67,28 @@ class VideoDataGenerator():
         temporal_crop_modes = (None,'sequential','random','custom')
         frame_crop_modes = (None,'sequential','random','custom')
 
-        self.ds_directory = directory_path
+        method_flag = 0
         self.video_transformation = video_transformation
         self.transformation_index = 0
         self.dev_path = None
         self.dev_data = None
 
-        """Proceso de revisar que los directorios del path esten en la jerarquia correcta"""
-        directories = os.listdir(self.ds_directory)
-        for i in directories:
-            if i.lower() == "train":
-                self.train_path = os.path.join(self.ds_directory,i)
-                self.train_batch_index = 0
-                self.train_data = []
-            elif i.lower() == "test":
-                self.test_path = os.path.join(self.ds_directory,i)
-                self.test_batch_index = 0
-                self.test_data = []
-            elif i.lower() == "dev":
-                self.dev_path = os.path.join(self.ds_directory,i)
-                self.dev_batch_index = 0
-                self.dev_data = []
-            else:
-                raise ValueError(
-                    'La organizacion de la carpeta debe seguir la estructura '
-                    'de train, test y dev (este ultimo opcional) teniendo '
-                    'los mismos nombres sin importar mayus o minus. '
-                    'Carpeta del error: %s' % i)
+        """Proceso de revisar que los directorios del path esten en la jerarquia correcta si se usa un directorio"""
+        if directory_path:
+            method_flag = 1
+            self.using_folders(directory_path)
+
+        """Proceso de revisar que el table_paths este bien formado"""
+        if table_paths:
+            if method_flag == 1:
+                raise ValueError('Debe usar unicamente uno de los dos metodos para cargar los datos pero '
+                                 'no ambos. Valores pasados: {dp} junto a {df}'.format(dp=directory_path, df=table_paths))
+            method_flag = 2
+            self.using_table_paths(table_paths)
+
+        if method_flag == 0:
+            raise ValueError('Debe usar al menos un metodo para cargar los datos, o bien por directorio de carpetas '
+                             'o por medio de una tabla con las rutas de las carpetas. Ambos valores pasados fueron None.')
 
         """Proceso de revisar que las transformaciones escojidas son validas"""
         if temporal_crop[0] not in temporal_crop_modes:
@@ -170,33 +172,122 @@ class VideoDataGenerator():
         if shuffle:
             self.shuffle_videos()
 
-    def generate_classes(self):
+    def using_folders(self, directory_path):
+        """Metodo que se encarga de construir los path de los videos a partir del
+        directorio pasado por el usuario.
+         Args:
+             directory_path: String que tiene la ruta absoluta de la ubicacion del
+                                       dataset, incluyendo en el path el split.
+             """
+        directories = os.listdir(directory_path)
+        for i in directories:
+            if i.lower() == "train":
+                self.train_path = os.path.join(directory_path, i)
+                self.train_batch_index = 0
+                self.train_data = []
+            elif i.lower() == "test":
+                self.test_path = os.path.join(directory_path, i)
+                self.test_batch_index = 0
+                self.test_data = []
+            elif i.lower() == "dev":
+                self.dev_path = os.path.join(directory_path, i)
+                self.dev_batch_index = 0
+                self.dev_data = []
+            else:
+                raise ValueError(
+                    'La organizacion de la carpeta debe seguir la estructura '
+                    'de train, test y dev (este ultimo opcional) teniendo '
+                    'los mismos nombres sin importar mayus o minus. '
+                    'Carpeta del error: %s' % i)
+
+    def using_table_paths(self, table_paths):
+        """Metodo que se encarga de construir los paths de los videos a partir de una matrix
+        o tabla que contiene los paths, tipo de video y clase del mismo en ella.
+        Args:
+            table_paths: Dataframe, numpy array o python matrix con forma (nro_videos, 3) donde las
+                                  columnas son (path_video, tipo_video, clase o etiqueta) y tipo de video puede ser
+                                  "train", "test" o "dev" unicamente.
+            """
+        if isinstance(table_paths, list):
+            self.df = np.r_[table_paths]
+        elif isinstance(table_paths, pd.DataFrame):
+            self.df = table_paths.values
+        elif isinstance(table_paths, np.ndarray):
+            self.df = table_paths
+        else:
+            raise ValueError(
+                'El parametro de table_paths debe ser de tipo lista de python, array de numpy o DataFrame de '
+                'pandas unicamente. Tipo de table_paths pasado: ' + str(type(table_paths)))
+
+        if self.df.shape[1] != 3 and self.df.ndim != 2:
+            raise ValueError(
+                'table_paths o no es una matriz o no tiene 3 columnas. Dimensiones pasadas: ' + str(self.df.shape))
+
+    def generate_classes(self, method_flag):
         """Metodo que se encarga de generar el numero de clases, los nombres
         de clases, numeros con indices de clase y el diccionario que convierte de clase
-        a numero como de numero a clase"""
+        a numero como de numero a clase.
+        Args:
+            method_flag: Variable numerica que me indica en que forma estoy cargando los datos.
+        """
+        if method_flag == 1:
+            self.to_class = [clase.lower() for clase in sorted(os.listdir(self.train_path))] #Equivale al vector de clases
+        elif method_flag == 2:
+            self.to_class = [str(clase).lower() for clase in np.unique(self.df[:,2])]
+        else:
+            raise ValueError('El valor pasado a la funcion generate_classes con el parametro method_flag debe ser un numero '
+                             'entre 1 y 2. Valor pasado: '+str(method_flag))
+        self.to_number = dict((name, index) for index, name in enumerate(self.to_class))
 
-        self.to_class = [clase.lower() for clase in sorted(os.listdir(self.train_path))] #Equivale al vector de clases
-        self.to_number = dict((name, index) for index,name in enumerate(self.to_class))
-
-    def generate_videos_paths(self):
+    def generate_videos_paths(self, method_flag):
         """Metodo que se encarga de generar una lista con el path absoluto de todos los videos para train, test y
         dev si llega a aplicar esta carpeta."""
+
         self.videos_train_path = []
         self.videos_test_path = []
         if self.dev_path:
             self.videos_dev_path = []
+        if method_flag == 1:
+            for clase in sorted(os.listdir(self.train_path)):
 
-        for clase in sorted(os.listdir(self.train_path)):
+                videos_train_path = os.path.join(self.train_path,clase)
+                self.videos_train_path += [os.path.join(videos_train_path,i) for i in sorted(os.listdir(videos_train_path))]
 
-            videos_train_path = os.path.join(self.train_path,clase)
-            self.videos_train_path += [os.path.join(videos_train_path,i) for i in sorted(os.listdir(videos_train_path))]
+                videos_test_path = os.path.join(self.test_path,clase)
+                self.videos_test_path += [os.path.join(videos_test_path,i) for i in sorted(os.listdir(videos_test_path))]
 
-            videos_test_path = os.path.join(self.test_path,clase)
-            self.videos_test_path += [os.path.join(videos_test_path,i) for i in sorted(os.listdir(videos_test_path))]
+                if self.dev_path:
+                    videos_dev_path = os.path.join(self.dev_path,clase)
+                    self.videos_dev_path += [os.path.join(videos_dev_path,i) for i in sorted(os.listdir(videos_dev_path))]
+        elif method_flag == 2:
+            videos_dev_path = []
+            dev_indexes = []
+            self.train_indexes = []
+            self.test_indexes = []
 
-            if self.dev_path:
-                videos_dev_path = os.path.join(self.dev_path,clase)
-                self.videos_dev_path += [os.path.join(videos_dev_path,i) for i in sorted(os.listdir(videos_dev_path))]
+            for index, video_path in enumerate(self.df):
+                if str(video_path[1]).lower() == "train":
+                    self.videos_train_path += [str(video_path[0])]
+                    self.train_indexes += [index]
+                elif str(video_path[2]).lower() == "test":
+                    self.videos_test_path += [str(video_path[0])]
+                    self.test_indexes += [index]
+                elif str(video_path[2]).lower() == "dev" and self.dev_path:
+                    videos_dev_path += [str(video_path[0])]
+                    dev_indexes += [index]
+                else:
+                    raise AssertionError(
+                        'Dentro de la estructura de table_paths existe un tipo de video no compatible. '
+                        'Los valores permitidos son "train", "test" y "dev". Valor del error: ' + str(video_path[2]))
+
+            if len(videos_dev_path) > 0:
+                self.dev_path = True
+                self.dev_indexes = dev_indexes
+                self.videos_dev_path = videos_dev_path
+        else:
+            raise ValueError(
+                'El valor pasado a la funcion generate_video_paths con el parametro method_flag debe ser un numero '
+                'entre 1 y 2. Valor pasado: ' + str(method_flag))
 
     def complete_batches(self):
         self.train_batches = int( len(self.train_data) / self.batch_size)
@@ -205,14 +296,14 @@ class VideoDataGenerator():
             self.train_batches += 1
             random_index = np.random.randint(0, len(self.train_data) - self.batch_size)
             self.train_data +=  self.train_data[random_index:random_index + self.batch_size - residuo]
-        
+
         self.test_batches = int( len(self.test_data) /  self.batch_size)
         residuo = len(self.test_data) % self.batch_size
         if residuo != 0:
             self.test_batches += 1
             random_index = np.random.randint(0, len(self.test_data) - self.batch_size)
             self.test_data +=   self.test_data[random_index:random_index + self.batch_size - residuo]
-        
+
         if self.dev_path:
             self.dev_batches = int( len(self.dev_data) / self.batch_size)
             residuo = len(self.dev_data) % self.batch_size
@@ -398,13 +489,16 @@ class VideoDataGenerator():
         especificado por el usuario"""
         return cv2.resize(image, tuple(self.frame_size))
 
-    def sequential_temporal_crop(self, video_path, list_name):
+    def sequential_temporal_crop(self, video_path, video_index, list_name, method_flag):
         """Metodo que se encarga de realizar el corte temporal secuencial en
        un video dado por su path y se agregara a la lista indicada.
         Args:
             video_path: String del ath donde se encuentran los frames del video.
+            video_index: Entero que corresponde al indice en el df del video, solo se usa
+                                 cuando esta method_flag en 2.
             list_name: String con las opciones ("train", "test", "dev") para escoger
                               a que lista se agregaran los videos de formas secuencial.
+             method_flag: Variable numerica que me indica en que forma estoy cargando los datos.
         """
         if not isinstance(video_path, str):
             raise ValueError('Se ha pasado video_path como una instancia diferente'
@@ -413,7 +507,22 @@ class VideoDataGenerator():
         frames_path = [os.path.join(video, frame) for frame in sorted(os.listdir(video))]
         while len(frames_path) < self.video_frames:
             frames_path += frames_path[:self.video_frames - len(frames_path)]
-        label = self.to_number[video.split("/")[-2].lower()]
+        if method_flag == 1:
+            label = self.to_number[video.split("/")[-2].lower()]
+        elif method_flag == 2:
+            if list_name == "train":
+                label = self.to_number[str(self.df[self.train_indexes[video_index],2]).lower()]
+            elif list_name == "test":
+                label = self.to_number[str(self.df[self.test_indexes[video_index], 2]).lower()]
+            elif list_name == "dev":
+                label = self.to_number[str(self.df[self.dev_indexes[video_index], 2]).lower()]
+            else:
+                raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                                 'pueden asignar el label del  elemento a los datos de train, test '
+                                 'y dev. Modo pasado: {i}'.format(i=list_name))
+        else:
+            raise ValueError('El valor pasado a la funcion generate_classes con el parametro method_flag debe ser un numero '
+                             'entre 1 y 2. Valor pasado: '+str(method_flag))
 
         n_veces = len(frames_path) // self.video_frames
         for i in range(n_veces):
@@ -435,15 +544,18 @@ class VideoDataGenerator():
                                  'pueden agregar elementos a los datos de train, test '
                                  'y dev. Modo pasado: {i}'.format(i=list_name))
 
-    def random_temporal_crop(self, video_path, list_name, n_veces):
+    def random_temporal_crop(self, video_path, video_index, list_name, n_veces, method_flag):
         """Metodo que se encarga de realizar el corte temporal aleatorio en
         un video dado por su path y se agregara a la lista indicada.
                 Args:
                     video_path: String del ath donde se encuentran los frames del video.
+                    video_index: Entero que corresponde al indice en el df del video, solo se usa
+                                         cuando esta method_flag en 2.
                     list_name: String con las opciones ("train", "test", "dev") para escoger
                                       a que lista se agregaran los videos de formas aleatoria.
                     n_veces: Entero que indica cuantos cortes temporales aleatorios se
                                    deben hace sobre el video.
+                    method_flag: Variable numerica que me indica en que forma estoy cargando los datos.
         """
         if not isinstance(video_path, str):
             raise ValueError('Se ha pasado video_path como una instancia diferente'
@@ -452,7 +564,23 @@ class VideoDataGenerator():
         frames_path = [os.path.join(video, frame) for frame in sorted(os.listdir(video))]
         while len(frames_path) < self.video_frames:
             frames_path += frames_path[:self.video_frames - len(frames_path)]
-        label = self.to_number[video.split("/")[-2].lower()]
+        if method_flag == 1:
+            label = self.to_number[video.split("/")[-2].lower()]
+        elif method_flag == 2:
+            if list_name == "train":
+                label = self.to_number[str(self.df[self.train_indexes[video_index], 2]).lower()]
+            elif list_name == "test":
+                label = self.to_number[str(self.df[self.test_indexes[video_index], 2]).lower()]
+            elif list_name == "dev":
+                label = self.to_number[str(self.df[self.dev_indexes[video_index], 2]).lower()]
+            else:
+                raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                                 'pueden asignar el label del  elemento a los datos de train, test '
+                                 'y dev. Modo pasado: {i}'.format(i=list_name))
+        else:
+            raise ValueError(
+                'El valor pasado a la funcion generate_classes con el parametro method_flag debe ser un numero '
+                'entre 1 y 2. Valor pasado: ' + str(method_flag))
 
         for _ in range(n_veces):
             start = np.random.randint(0, len(frames_path)-self.video_frames)
@@ -473,15 +601,18 @@ class VideoDataGenerator():
                                  'pueden agregar elementos a los datos de train, test '
                                  'y dev. Modo pasado: {i}'.format(i=list_name))
 
-    def custom_temporal_crop(self, video_path, list_name, custom_fn):
+    def custom_temporal_crop(self, video_path, video_index, list_name, custom_fn, method_flag):
         """Metodo que se encarga de realizar el corte temporal customizado en
             un video dado por su path y se agregara a la lista indicada.
                 Args:
                     video_path: String del ath donde se encuentran los frames del video.
+                    video_index: Entero que corresponde al indice en el df del video, solo se usa
+                                         cuando esta method_flag en 2.
                     list_name: String con las opciones ("train", "test", "dev") para escoger
                                       a que lista se agregaran los videos de formas custom.
                     custom_fn: Callback que corresponde a la funcion customizada a la
                                         que le aplicara sobre cada video.
+                    method_flag: Variable numerica que me indica en que forma estoy cargando los datos.
         """
         if not isinstance(video_path, str):
             raise ValueError('Se ha pasado video_path como una instancia diferente'
@@ -492,7 +623,23 @@ class VideoDataGenerator():
             frames_path += frames_path[:self.video_frames - len(frames_path)]
         try:
             frames = custom_fn(frames_path)
-            label = self.to_number[video.split("/")[-2].lower()]
+            if method_flag == 1:
+                label = self.to_number[video.split("/")[-2].lower()]
+            elif method_flag == 2:
+                if list_name == "train":
+                    label = self.to_number[str(self.df[self.train_indexes[video_index], 2]).lower()]
+                elif list_name == "test":
+                    label = self.to_number[str(self.df[self.test_indexes[video_index], 2]).lower()]
+                elif list_name == "dev":
+                    label = self.to_number[str(self.df[self.dev_indexes[video_index], 2]).lower()]
+                else:
+                    raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                                     'pueden asignar el label del  elemento a los datos de train, test '
+                                     'y dev. Modo pasado: {i}'.format(i=list_name))
+            else:
+                raise ValueError(
+                    'El valor pasado a la funcion generate_classes con el parametro method_flag debe ser un numero '
+                    'entre 1 y 2. Valor pasado: ' + str(method_flag))
             n_veces = len(frames)
             for i in range(n_veces):
                 if len(frames[i]) != self.video_frames:
@@ -523,13 +670,16 @@ class VideoDataGenerator():
                 ' especificada'
             )
 
-    def none_temporal_crop(self, video_path, list_name):
+    def none_temporal_crop(self, video_path, video_index, list_name, method_flag):
         """Metodo que se encarga de realizar el corte temporal None en
         un video dado por su path y se agregara a la lista indicada.
         Args:
             video_path: String del ath donde se encuentran los frames del video.
+            video_index: Entero que corresponde al indice en el df del video, solo se usa
+                                         cuando esta method_flag en 2.
             list_name: String con las opciones ("train", "test", "dev") para escoger
                               a que lista se agregaran los videos de formas None.
+            method_flag: Variable numerica que me indica en que forma estoy cargando los datos.
         """
         if not isinstance(video_path, str):
             raise ValueError('Se ha pasado video_path como una instancia diferente'
@@ -540,7 +690,23 @@ class VideoDataGenerator():
         while len(frames_path) < self.video_frames:
             frames_path += frames_path[:self.video_frames - len(frames_path)]
         frames_path = frames_path[:self.video_frames]
-        label = self.to_number[video.split("/")[-2].lower()]
+        if method_flag == 1:
+            label = self.to_number[video.split("/")[-2].lower()]
+        elif method_flag == 2:
+            if list_name == "train":
+                label = self.to_number[str(self.df[self.train_indexes[video_index], 2]).lower()]
+            elif list_name == "test":
+                label = self.to_number[str(self.df[self.test_indexes[video_index], 2]).lower()]
+            elif list_name == "dev":
+                label = self.to_number[str(self.df[self.dev_indexes[video_index], 2]).lower()]
+            else:
+                raise ValueError('Se ha pasado un modo invalido al cual no se le '
+                                 'pueden asignar el label del  elemento a los datos de train, test '
+                                 'y dev. Modo pasado: {i}'.format(i=list_name))
+        else:
+            raise ValueError(
+                'El valor pasado a la funcion generate_classes con el parametro method_flag debe ser un numero '
+                'entre 1 y 2. Valor pasado: ' + str(method_flag))
         elemento = {(name, None): (frames_path, label)}
         self.transformation_index += 1
         if list_name == 'train':
@@ -554,25 +720,26 @@ class VideoDataGenerator():
                              'pueden agregar elementos a los datos de train, test '
                              'y dev. Modo pasado: {i}'.format(i=list_name))
 
-    def temporal_crop(self, mode , custom_fn):
+    def temporal_crop(self, mode , custom_fn, method_flag):
         """Metodo que se encarga de realizar el corte temporal en los videos de
         train, test y dev segun el modo especificado y los agrega a la lista de datos.
         Args:
             mode: String o None que corresponde al modo de aumento de datos.
             custom_fn: Callback o funcion de python que retorna la lista de los path a cargar,
+            method_flag: Variable numerica que me indica en que forma estoy cargando los datos.
             """
         if mode == 'sequential':
             """ Modo secuencial, donde se toman todos los frames del video en forma
             secuencial hasta donde el video lo permita"""
-            for video in self.videos_train_path:
-                self.sequential_temporal_crop(video,"train")
+            for index, video in enumerate(self.videos_train_path):
+                self.sequential_temporal_crop(video, index, "train", method_flag)
 
-            for video in self.videos_test_path:
-                self.sequential_temporal_crop(video,"test")
+            for index, video in enumerate(self.videos_test_path):
+                self.sequential_temporal_crop(video,index, "test", method_flag)
 
             if self.dev_path:
-                for video in self.videos_dev_path:
-                    self.sequential_temporal_crop(video,"dev")
+                for index, video in enumerate(self.videos_dev_path):
+                    self.sequential_temporal_crop(video,index,"dev",method_flag)
 
         elif mode == 'random':
             """Modo aleatorio, donde la funcion personalizada corresponde al numero
@@ -586,29 +753,29 @@ class VideoDataGenerator():
                     'Al usar el modo de corte temporal aleatorio, custom_fn debe ser un entero'
                     ', el valor entregado es de tipo: %s' % type(custom_fn)
                 )
-            for video in self.videos_train_path:
-                self.random_temporal_crop(video, "train", n_veces)
+            for index, video in enumerate(self.videos_train_path):
+                self.random_temporal_crop(video, index, "train", n_veces, method_flag)
 
-            for video in self.videos_test_path:
-                self.random_temporal_crop(video, "test", n_veces)
+            for index, video in enumerate(self.videos_test_path):
+                self.random_temporal_crop(video, index, "test", n_veces, method_flag)
 
             if self.dev_path:
-                for video in self.videos_dev_path:
-                    self.random_temporal_crop(video, "dev", n_veces)
+                for index, video in enumerate(self.videos_dev_path):
+                    self.random_temporal_crop(video, index, "dev", n_veces, method_flag)
 
         elif mode == 'custom':
             """Metodo que se encarga de ejecutar la funcion customizada a cada video
             y ejecutar el metodo para obtener los datos a agregar."""
             if custom_fn:
-                for video in self.videos_train_path:
-                    self.custom_temporal_crop(video,"train",custom_fn)
+                for index, video in enumerate(self.videos_train_path):
+                    self.custom_temporal_crop(video,index, "train",custom_fn, method_flag)
 
-                for video in self.videos_test_path:
-                    self.custom_temporal_crop(video, "test", custom_fn)
+                for index, video in enumerate(self.videos_test_path):
+                    self.custom_temporal_crop(video, index, "test", custom_fn, method_flag)
 
                 if self.dev_path:
-                    for video in self.videos_dev_path:
-                        self.custom_temporal_crop(video, "dev", custom_fn)
+                    for index, video in enumerate(self.videos_dev_path):
+                        self.custom_temporal_crop(video, index, "dev", custom_fn, method_flag)
             else:
                 raise ValueError('Debe pasar la funcion customizada para el '
                     'modo customizado, de lo contrario no podra usarlo. Tipo de dato'
@@ -616,15 +783,15 @@ class VideoDataGenerator():
 
         else:
             """Modo None, donde se toman los primeros frames del video"""
-            for video in self.videos_train_path:
-                self.none_temporal_crop(video, "train")
+            for index, video in enumerate(self.videos_train_path):
+                self.none_temporal_crop(video, index, "train", method_flag)
 
-            for video in self.videos_test_path:
-                self.none_temporal_crop(video, "test")
+            for index, video in enumerate(self.videos_test_path):
+                self.none_temporal_crop(video, index, "test", method_flag)
 
             if self.dev_path:
-                for video in self.videos_dev_path:
-                    self.none_temporal_crop(video, "dev")
+                for index, video in enumerate(self.videos_dev_path):
+                    self.none_temporal_crop(video, index, "dev", method_flag)
 
     def sequential_frame_crop(self,list_name, conserve):
         """Metodo que se encarga de realizar el corte espacial secuencial en
