@@ -1,6 +1,6 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
-You can use it in your own and only have two dependencies with opencv and numpy.
-Version: 2.1
+You can use it in your own and only have three dependencies with opencv, numpy and pandas.
+Version: 2.2.2
 """
 
 import os
@@ -49,8 +49,9 @@ class VideoDataGenerator():
             temporal_crop: Tupla de la forma (Modo, funcion customizada o callback)
                                     de python e indica que tipo de corte temporal se hara sobre los videos.
                                     Por defecto en (None, None).
-            video_transformation: Callback de python que permite realizar cualquier tipo de transformacion
-                                                sobre el video despues de haber sido cargado. Por defecto en None.
+            video_transformation: Lista de python que contiene tuplas de la forma (aplicabilidad, callback python).
+                                                 La aplicabilidad puede ser "full" o "augmented". El orden que lleve la lista es como
+                                                 se aplican las transformaciones. Por defecto en None
             frame_crop: Tupla de la forma (Modo, funcion customizada o callback)
                                  de python e indica el tipo de corte para cada frame de cada video
                                 que se hara sobre los videos. Por defecto en (None, None).
@@ -68,18 +69,17 @@ class VideoDataGenerator():
         frame_crop_modes = (None,'sequential','random','custom')
 
         method_flag = 0
-        self.video_transformation = video_transformation
         self.transformation_index = 0
         self.dev_path = None
         self.dev_data = None
 
         """Proceso de revisar que los directorios del path esten en la jerarquia correcta si se usa un directorio"""
-        if directory_path:
+        if directory_path is not None:
             method_flag = 1
             self.using_folders(directory_path)
 
         """Proceso de revisar que el table_paths este bien formado"""
-        if table_paths:
+        if table_paths is not None:
             if method_flag == 1:
                 raise ValueError('Debe usar unicamente uno de los dos metodos para cargar los datos pero '
                                  'no ambos. Valores pasados: {dp} junto a {df}'.format(dp=directory_path, df=table_paths))
@@ -105,8 +105,8 @@ class VideoDataGenerator():
             )
 
         """Proceso de generar los path de los videos para la verificacion subsiguiente de parametros"""
-        self.generate_classes()
-        self.generate_videos_paths()
+        self.generate_classes(method_flag)
+        self.generate_videos_paths(method_flag)
 
         """Proceso de definir el tamaño de batch si fue especificado como None"""
         if batch_size:
@@ -164,13 +164,47 @@ class VideoDataGenerator():
 
         """Proceso de generar los datos con o sin transformaciones"""
         if conserve_original and temporal_crop[0] not in (None, 'sequential'):
-            self.temporal_crop(mode = 'sequential', custom_fn=temporal_crop[1])
-        self.temporal_crop(mode = temporal_crop[0], custom_fn=temporal_crop[1])
+            self.temporal_crop(mode = 'sequential', custom_fn=temporal_crop[1], method_flag=method_flag)
+        self.temporal_crop(mode = temporal_crop[0], custom_fn=temporal_crop[1], method_flag=method_flag)
         self.frame_crop(mode=frame_crop[0], custom_fn=frame_crop[1], conserve_original=conserve_original)
 
-        self.complete_batches()
+        """Proceso de realizar el desordenamiento de los datos"""
         if shuffle:
             self.shuffle_videos()
+
+        """Proceso de verificar que las transformaciones sobre los videos esten bien"""
+        if video_transformation:
+            self.train_indexes = []
+            self.test_indexes = []
+            if self.dev_path:
+                self.dev_indexes = []
+            try:
+                for mode, _ in video_transformation:
+                    if mode.lower() == "augmented":
+                        self.train_indexes.append(len(self.train_data) // self.batch_size)
+                        self.train_data = np.append(self.train_data, self.train_data)
+                        self.test_indexes.append(len(self.test_data) // self.batch_size)
+                        self.test_data = np.append(self.test_data, self.test_data)
+                        if self.dev_path:
+                            self.dev_indexes.append(len(self.dev_data) // self.batch_size)
+                            self.dev_data = np.append(self.dev_data, self.dev_data)
+                    elif mode.lower() == "full":
+                        self.train_indexes.append(0)
+                        self.test_indexes.append(0)
+                        if self.dev_path:
+                            self.dev_indexes.append(0)
+                    else:
+                        raise AttributeError('Se ha especificado una transformacion con modo no valido. Los valores '
+                                             'validos son "full" o "augmented". Valor pasado: '+str(mode))
+            except:
+                raise ValueError('El parametro de video_transformation debe ser una lista de python con tuplas que contienen 2 valores. Estas tuplas '
+                                 'tienen la forma (modo_aplicacion, callback python) donde modo puede ser "full" o "augmented". Parametro pasado: '+str(video_transformation))
+            self.video_transformation = [pair[1] for pair in video_transformation]
+        else:
+            self.video_transformation = video_transformation
+
+        """Por ultimo el proceso de completar los batches en caso de hacer falta"""
+        self.complete_batches()
 
     def using_folders(self, directory_path):
         """Metodo que se encarga de construir los path de los videos a partir del
@@ -265,25 +299,33 @@ class VideoDataGenerator():
             self.train_indexes = []
             self.test_indexes = []
 
-            for index, video_path in enumerate(self.df):
-                if str(video_path[1]).lower() == "train":
-                    self.videos_train_path += [str(video_path[0])]
+            for index, video_param in enumerate(self.df):
+                if str(video_param[1]).lower() == "train":
+                    self.videos_train_path += [str(video_param[0])]
                     self.train_indexes += [index]
-                elif str(video_path[2]).lower() == "test":
-                    self.videos_test_path += [str(video_path[0])]
+                elif str(video_param[1]).lower() == "test":
+                    self.videos_test_path += [str(video_param[0])]
                     self.test_indexes += [index]
-                elif str(video_path[2]).lower() == "dev" and self.dev_path:
-                    videos_dev_path += [str(video_path[0])]
+                elif str(video_param[1]).lower() == "dev":
+                    videos_dev_path += [str(video_param[0])]
                     dev_indexes += [index]
                 else:
                     raise AssertionError(
                         'Dentro de la estructura de table_paths existe un tipo de video no compatible. '
-                        'Los valores permitidos son "train", "test" y "dev". Valor del error: ' + str(video_path[2]))
+                        'Los valores permitidos son "train", "test" y "dev". Valor del error: ' + str(video_param[1]))
+
+            self.train_data = []
+            self.train_batch_index = 0
+
+            self.test_data = []
+            self.test_batch_index = 0
 
             if len(videos_dev_path) > 0:
                 self.dev_path = True
                 self.dev_indexes = dev_indexes
                 self.videos_dev_path = videos_dev_path
+                self.dev_data = []
+                self.dev_batch_index = 0
         else:
             raise ValueError(
                 'El valor pasado a la funcion generate_video_paths con el parametro method_flag debe ser un numero '
@@ -295,14 +337,16 @@ class VideoDataGenerator():
         if residuo != 0:
             self.train_batches += 1
             random_index = np.random.randint(0, len(self.train_data) - self.batch_size)
-            self.train_data +=  self.train_data[random_index:random_index + self.batch_size - residuo]
+            self.train_data =  np.append(self.train_data,
+                                         self.train_data[random_index:random_index + self.batch_size - residuo])
 
         self.test_batches = int( len(self.test_data) /  self.batch_size)
         residuo = len(self.test_data) % self.batch_size
         if residuo != 0:
             self.test_batches += 1
             random_index = np.random.randint(0, len(self.test_data) - self.batch_size)
-            self.test_data +=   self.test_data[random_index:random_index + self.batch_size - residuo]
+            self.test_data = np.append(self.test_data,
+                                        self.test_data[random_index:random_index + self.batch_size - residuo])
 
         if self.dev_path:
             self.dev_batches = int( len(self.dev_data) / self.batch_size)
@@ -310,7 +354,8 @@ class VideoDataGenerator():
             if residuo != 0:
                 self.dev_batches += 1
                 random_index = np.random.randint(0, len(self.dev_data) - self.batch_size)
-                self.dev_data += self.dev_data[random_index:random_index + self.batch_size - residuo]
+                self.dev_data = np.append(self.dev_data,
+                                            self.dev_data[random_index:random_index + self.batch_size - residuo])
 
     def shuffle_videos(self):
         """Metodo que se encarga de realizar shuffle a los datos si esta
@@ -339,26 +384,8 @@ class VideoDataGenerator():
             video.append(image)
 
         video = np.asarray(video, dtype=np.float32)
-        if self.video_transformation:
-            try:
-                if channels == 1:
-                    video = self.video_transformation(video.reshape((self.video_frames,self.frame_size[1], self.frame_size[0],1)))
-                else:
-                    video = self.video_transformation(video)
-                if video.shape != (self.video_frames, self.frame_size[1], self.frame_size[0], channels):
-                    raise AssertionError('La funcion pasada a video_transformation no retorna las dimensiones '
-                                         'esperadas que deberia tener el video. Dimension de video: '+str(video.shape)+
-                                         ' Dimensiones que deberia tener: ' + str((self.video_frames, self.frame_size[1], self.frame_size[0], channels))
-                    )
-            except:
-                raise AttributeError(
-                    'Se espera que el parametro video_tranformation sea un callback '
-                    'de python que reciba unicamente el video y retorna el video ya '
-                    'transformado con las dimensiones especificadas en los atributos.'
-                )
-        else:
-            if channels == 1:
-                video = video.reshape((self.video_frames,self.frame_size[1], self.frame_size[0],1))
+        if channels == 1:
+            video = video.reshape((self.video_frames,self.frame_size[1], self.frame_size[0],1))
         return video
 
     def get_next_train_batch(self, n_canales = 3):
@@ -381,6 +408,17 @@ class VideoDataGenerator():
             video = self.load_video(self.train_data[index], channels=n_canales)
             labels.append(label)
             batch.append(video)
+
+        if self.video_transformation:
+            for index, callback in enumerate(self.video_transformation):
+                if self.train_batch_index >= self.train_indexes[index]:
+                    for i in range(len(batch)):
+                        batch[i] = callback(batch[i])
+                        if batch[i].shape != (self.video_frames, self.frame_size[1], self.frame_size[0], n_canales):
+                            raise AssertionError('La funcion pasada a video_transformation no retorna las dimensiones '
+                                                 'esperadas que deberia tener el video. Dimension de video: '+str(batch[i].shape)+
+                                                 ' Dimensiones que deberia tener: ' + str((self.video_frames, self.frame_size[1], self.frame_size[0], n_canales))
+                            )
 
         self.train_batch_index += 1
 
@@ -407,6 +445,17 @@ class VideoDataGenerator():
             labels.append(label)
             batch.append(video)
 
+        if self.video_transformation:
+            for index, callback in enumerate(self.video_transformation):
+                if self.train_batch_index >= self.test_indexes[index]:
+                    for i in range(len(batch)):
+                        batch[i] = callback(batch[i])
+                        if batch[i].shape != (self.video_frames, self.frame_size[1], self.frame_size[0], n_canales):
+                            raise AssertionError('La funcion pasada a video_transformation no retorna las dimensiones '
+                                                 'esperadas que deberia tener el video. Dimension de video: '+str(batch[i].shape)+
+                                                 ' Dimensiones que deberia tener: ' + str((self.video_frames, self.frame_size[1], self.frame_size[0], n_canales))
+                            )
+
         self.test_batch_index += 1
 
         return np.asarray(batch, dtype=np.float32), np.asarray(labels, dtype=np.int32)
@@ -431,6 +480,19 @@ class VideoDataGenerator():
                 video = self.load_video(self.dev_data[index], channels=n_canales)
                 labels.append(label)
                 batch.append(video)
+
+            if self.video_transformation:
+                for index, callback in enumerate(self.video_transformation):
+                    if self.train_batch_index >= self.train_indexes[index]:
+                        for i in range(len(batch)):
+                            batch[i] = callback(batch[i])
+                            if batch[i].shape != (self.video_frames, self.frame_size[1], self.frame_size[0], n_canales):
+                                raise AssertionError(
+                                    'La funcion pasada a video_transformation no retorna las dimensiones '
+                                    'esperadas que deberia tener el video. Dimension de video: ' + str(batch[i].shape) +
+                                    ' Dimensiones que deberia tener: ' + str(
+                                        (self.video_frames, self.frame_size[1], self.frame_size[0], n_canales))
+                                    )
 
             self.dev_batch_index += 1
 

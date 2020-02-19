@@ -6,18 +6,14 @@ in a folder and load sequentially from it.
 the notation of channels in the last dimension. NFHWC (N - Batch, F - Frames, 
 H - Height, W - Width and C - Channels). 
 
-**Actual version: v2.0**
+**Actual version: v2.2.2**
 
-- Features:
-    - Added `video_transformation` method that modifies the video before its 
-    returned by `VideoDataGenerator` for any code make by you under some constraint. 
-    Read the constraint below.
-    - Added an example of how to use `video_transformation` in _main.py_.
-    - Modified the option of `batch_size` to None. When None is passed `VideoDataGenerator`
-    will take the minimum video files of train. test or dev but if exist less than 32 
-    videos, otherwise `batch_size ` will be 32.
-    - Modified the behavior of mode random in `temporal_crop` now it takes random 
-    frames between the video and not concatenate the beginning with the end of the video.
+- Features
+    - Now `video_transformation` is a list with all the transformation that you 
+    want to make to the videos. If is for all videos the mode is "full" or if you want 
+    to duplicate the videos is with "augmented" mode.
+    - Added the option to load datasets from a matrix of python, numpy or pandas.
+    - Updated the example of how to use `video_transformation` in _main.py_.
     
 - Future features:
     - Any ideas? Contribute now!
