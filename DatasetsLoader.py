@@ -1,6 +1,6 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
 You can use it in your own and only have three dependencies with opencv, numpy and pandas.
-Version: 2.2.3
+Version: 2.2.4
 """
 
 import os
@@ -27,6 +27,7 @@ class VideoDataGenerator():
                  video_transformation = None,
                  frame_crop = (None, None),
                  shuffle = False,
+                 shuffle_after_epoch = False,
                  conserve_original = False
                  ):
         """Constructor de la clase.
@@ -55,8 +56,10 @@ class VideoDataGenerator():
             frame_crop: Tupla de la forma (Modo, funcion customizada o callback)
                                  de python e indica el tipo de corte para cada frame de cada video
                                 que se hara sobre los videos. Por defecto en (None, None).
-            shuffle: Booleano que determina si deben ser mezclados aleatoreamente los datos.
+            shuffle: Booleano que determina si deben ser mezclados aleatoreamente los datos al inicio.
                         Por defecto en False.
+            shuffle_after_epoch: Booleano que determina si al completar un epoch se deben mezclar aleatoriamente
+                                 los datos de nuevo. Por defecto en False.
             conserve_original: Booleano que determina si se debe guardar los datos originales
                                           junto a los datos transformados para entregarlos. Por defecto
                                           en False
@@ -72,6 +75,7 @@ class VideoDataGenerator():
         self.transformation_index = 0
         self.dev_path = None
         self.dev_data = None
+        self.shuffle = shuffle_after_epoch
 
         """Proceso de revisar que los directorios del path esten en la jerarquia correcta si se usa un directorio"""
         if directory_path is not None:
@@ -168,31 +172,38 @@ class VideoDataGenerator():
         self.temporal_crop(mode = temporal_crop[0], custom_fn=temporal_crop[1], method_flag=method_flag)
         self.frame_crop(mode=frame_crop[0], custom_fn=frame_crop[1], conserve_original=conserve_original)
 
-        """Proceso de realizar el desordenamiento de los datos"""
-        if shuffle:
-            self.shuffle_videos()
+        """Proceso de completar los batches en caso de hacer falta"""
+        self.complete_batches()
 
         """Proceso de verificar que las transformaciones sobre los videos esten bien"""
         if video_transformation:
-            self.train_indexes = []
-            self.test_indexes = []
+            self.trans_train_indexes = []
+            self.trans_test_indexes = []
             if self.dev_path:
-                self.dev_indexes = []
+                self.trans_dev_indexes = []
             try:
+                len_train = len(self.train_data)
+                len_test = len(self.test_data)
+                if self.dev_path:
+                    len_dev = len(self.dev_data)
                 for mode, _ in video_transformation:
                     if mode.lower() == "augmented":
-                        self.train_indexes.append(len(self.train_data) // self.batch_size)
-                        self.train_data = np.append(self.train_data, self.train_data)
-                        self.test_indexes.append(len(self.test_data) // self.batch_size)
-                        self.test_data = np.append(self.test_data, self.test_data)
+                        self.trans_train_indexes.append(len_train // self.batch_size)
+                        self.train_batches *= 2
+                        len_train *= 2
+
+                        self.trans_test_indexes.append(len_test // self.batch_size)
+                        self.test_batches *= 2
+                        len_test *= 2
                         if self.dev_path:
-                            self.dev_indexes.append(len(self.dev_data) // self.batch_size)
-                            self.dev_data = np.append(self.dev_data, self.dev_data)
+                            self.trans_dev_indexes.append(len_dev // self.batch_size)
+                            self.dev_batches *= 2
+                            len_dev *= 2
                     elif mode.lower() == "full":
-                        self.train_indexes.append(0)
-                        self.test_indexes.append(0)
+                        self.trans_train_indexes.append(0)
+                        self.trans_test_indexes.append(0)
                         if self.dev_path:
-                            self.dev_indexes.append(0)
+                            self.trans_dev_indexes.append(0)
                     else:
                         raise AttributeError('Se ha especificado una transformacion con modo no valido. Los valores '
                                              'validos son "full" o "augmented". Valor pasado: '+str(mode))
@@ -203,8 +214,9 @@ class VideoDataGenerator():
         else:
             self.video_transformation = video_transformation
 
-        """Por ultimo el proceso de completar los batches en caso de hacer falta"""
-        self.complete_batches()
+        """Por ultimo el proceso de realizar el desordenamiento de los datos"""
+        if shuffle:
+            self.shuffle_videos()
 
     def using_folders(self, directory_path):
         """Metodo que se encarga de construir los path de los videos a partir del
@@ -332,39 +344,48 @@ class VideoDataGenerator():
                 'entre 1 y 2. Valor pasado: ' + str(method_flag))
 
     def complete_batches(self):
+        self.train_indexes = list(range(0, len(self.train_data)))
         self.train_batches = int( len(self.train_data) / self.batch_size)
         residuo = len(self.train_data) % self.batch_size
         if residuo != 0:
             self.train_batches += 1
-            random_index = np.random.randint(0, len(self.train_data) - self.batch_size)
-            self.train_data =  np.append(self.train_data,
-                                         self.train_data[random_index:random_index + self.batch_size - residuo])
+            for i in range(self.batch_size - residuo):
+                random_index = np.random.randint(0, len(self.train_data))
+                self.train_indexes += [random_index]
+                self.train_data =  np.append(self.train_data,
+                                         self.train_data[random_index])
 
+        self.test_indexes = list(range(0, len(self.test_data)))
         self.test_batches = int( len(self.test_data) /  self.batch_size)
         residuo = len(self.test_data) % self.batch_size
         if residuo != 0:
             self.test_batches += 1
-            random_index = np.random.randint(0, len(self.test_data) - self.batch_size)
-            self.test_data = np.append(self.test_data,
-                                        self.test_data[random_index:random_index + self.batch_size - residuo])
+            for i in range(self.batch_size - residuo):
+                random_index = np.random.randint(0, len(self.test_data))
+                self.test_indexes += [random_index]
+                self.test_data = np.append(self.test_data,
+                                        self.test_data[random_index])
 
         if self.dev_path:
+            self.dev_indexes = list(range(0, len(self.dev_data)))
             self.dev_batches = int( len(self.dev_data) / self.batch_size)
             residuo = len(self.dev_data) % self.batch_size
             if residuo != 0:
                 self.dev_batches += 1
-                random_index = np.random.randint(0, len(self.dev_data) - self.batch_size)
-                self.dev_data = np.append(self.dev_data,
-                                            self.dev_data[random_index:random_index + self.batch_size - residuo])
+                for i in range(self.batch_size - residuo):
+                    random_index = np.random.randint(0, len(self.dev_data))
+                    self.dev_indexes += [random_index]
+                    self.dev_data = np.append(self.dev_data,
+                                            self.dev_data[random_index])
 
     def shuffle_videos(self):
         """Metodo que se encarga de realizar shuffle a los datos si esta
         activada la opcion de shuffle."""
-        self.train_data = np.random.permutation(self.train_data)
-        self.test_data = np.random.permutation(self.test_data)
+        self.train_indexes = np.random.permutation(self.train_indexes)
+        self.test_indexes = np.random.permutation(self.test_indexes)
 
         if self.dev_path:
-            self.dev_data = np.random.permutation(self.dev_data)
+            self.dev_indexes = np.random.permutation(self.dev_indexes)
 
     def load_video(self, video_dictionary, channels = 3):
         """Metodo que se encarga de cargar en memoria los frames de un video a partir del
@@ -396,22 +417,24 @@ class VideoDataGenerator():
             """
 
         if self.train_batch_index >= self.train_batches:
+            if self.shuffle:
+                self.train_indexes = np.random.permutation(self.train_indexes)
             self.train_batch_index = 0
 
-        start_index = self.train_batch_index*self.batch_size
-        end_index = (self.train_batch_index + 1)*self.batch_size
+        start_index = self.train_batch_index*self.batch_size % len(self.train_indexes)
+        end_index = (self.train_batch_index + 1)*self.batch_size % len(self.train_indexes)
 
         batch = []
         labels = []
         for index in range(start_index,end_index):
-            label = tuple(self.train_data[index].values())[0][1]
-            video = self.load_video(self.train_data[index], channels=n_canales)
+            label = tuple(self.train_data[self.train_indexes[index]].values())[0][1]
+            video = self.load_video(self.train_data[self.train_indexes[index]], channels=n_canales)
             labels.append(label)
             batch.append(video)
 
         if self.video_transformation:
             for index, callback in enumerate(self.video_transformation):
-                if self.train_batch_index >= self.train_indexes[index]:
+                if self.train_batch_index >= self.trans_train_indexes[index]:
                     for i in range(len(batch)):
                         batch[i] = callback(batch[i])
                         if batch[i].shape != (self.video_frames, self.frame_size[1], self.frame_size[0], n_canales):
@@ -432,22 +455,24 @@ class VideoDataGenerator():
             """
 
         if self.test_batch_index >= self.test_batches:
+            if self.shuffle:
+                self.test_indexes = np.random.permutation(self.test_indexes)
             self.test_batch_index = 0
 
-        start_index = self.test_batch_index * self.batch_size
-        end_index = (self.test_batch_index + 1) * self.batch_size
+        start_index = self.test_batch_index * self.batch_size % len(self.test_indexes)
+        end_index = (self.test_batch_index + 1) * self.batch_size % len(self.test_indexes)
 
         batch = []
         labels = []
         for index in range(start_index, end_index):
-            label = tuple(self.test_data[index].values())[0][1]
-            video = self.load_video(self.test_data[index], channels=n_canales)
+            label = tuple(self.test_data[self.test_indexes[index]].values())[0][1]
+            video = self.load_video(self.test_data[self.test_indexes[index]], channels=n_canales)
             labels.append(label)
             batch.append(video)
 
         if self.video_transformation:
             for index, callback in enumerate(self.video_transformation):
-                if self.test_batch_index >= self.test_indexes[index]:
+                if self.test_batch_index >= self.trans_test_indexes[index]:
                     for i in range(len(batch)):
                         batch[i] = callback(batch[i])
                         if batch[i].shape != (self.video_frames, self.frame_size[1], self.frame_size[0], n_canales):
@@ -468,22 +493,24 @@ class VideoDataGenerator():
                     """
         if self.dev_path:
             if self.dev_batch_index >= self.dev_batches:
+                if self.shuffle:
+                    self.dev_indexes = np.random.permutation(self.dev_indexes)
                 self.dev_batch_index = 0
 
-            start_index = self.dev_batch_index * self.batch_size
-            end_index = (self.dev_batch_index + 1) * self.batch_size
+            start_index = self.dev_batch_index * self.batch_size % len(self.dev_indexes)
+            end_index = (self.dev_batch_index + 1) * self.batch_size % len(self.dev_indexes)
 
             batch = []
             labels = []
             for index in range(start_index, end_index):
-                label = tuple(self.dev_data[index].values())[0][1]
-                video = self.load_video(self.dev_data[index], channels=n_canales)
+                label = tuple(self.dev_data[self.dev_indexes[index]].values())[0][1]
+                video = self.load_video(self.dev_data[self.dev_indexes[index]], channels=n_canales)
                 labels.append(label)
                 batch.append(video)
 
             if self.video_transformation:
                 for index, callback in enumerate(self.video_transformation):
-                    if self.dev_batch_index >= self.train_indexes[index]:
+                    if self.dev_batch_index >= self.trans_dev_indexes[index]:
                         for i in range(len(batch)):
                             batch[i] = callback(batch[i])
                             if batch[i].shape != (self.video_frames, self.frame_size[1], self.frame_size[0], n_canales):
