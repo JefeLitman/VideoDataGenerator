@@ -1,6 +1,6 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
 You can use it in your own and only have three dependencies with opencv, numpy and pandas.
-Version: 2.2.4
+Version: 2.2.5
 """
 
 import os
@@ -422,7 +422,7 @@ class VideoDataGenerator():
             self.train_batch_index = 0
 
         start_index = self.train_batch_index*self.batch_size % len(self.train_indexes)
-        end_index = (self.train_batch_index + 1)*self.batch_size % len(self.train_indexes)
+        end_index = start_index + self.batch_size
 
         batch = []
         labels = []
@@ -460,7 +460,7 @@ class VideoDataGenerator():
             self.test_batch_index = 0
 
         start_index = self.test_batch_index * self.batch_size % len(self.test_indexes)
-        end_index = (self.test_batch_index + 1) * self.batch_size % len(self.test_indexes)
+        end_index = start_index + self.batch_size
 
         batch = []
         labels = []
@@ -498,7 +498,7 @@ class VideoDataGenerator():
                 self.dev_batch_index = 0
 
             start_index = self.dev_batch_index * self.batch_size % len(self.dev_indexes)
-            end_index = (self.dev_batch_index + 1) * self.batch_size % len(self.dev_indexes)
+            end_index = start_index + self.batch_size
 
             batch = []
             labels = []
