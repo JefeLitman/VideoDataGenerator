@@ -1,6 +1,6 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
 You can use it in your own and only have three dependencies with opencv, numpy and pandas.
-Version: 2.2.5
+Version: 2.2.6
 """
 
 import os
@@ -536,7 +536,7 @@ class VideoDataGenerator():
         Args:
             n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
         """
-        while True:
+        for _ in range(self.train_batches):
             yield self.get_next_train_batch(n_canales)
 
     def get_test_generator(self, n_canales = 3):
@@ -545,7 +545,7 @@ class VideoDataGenerator():
         Args:
             n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
         """
-        while True:
+        for _ in range(self.test_batches):
             yield self.get_next_test_batch(n_canales)
 
     def get_dev_generator(self, n_canales = 3):
@@ -554,7 +554,7 @@ class VideoDataGenerator():
         Args:
             n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
         """
-        while True:
+        for _ in range(self.dev_batches):
             yield self.get_next_dev_batch(n_canales)
 
     def load_raw_frame(self,frame_path, channels = 3, original_size_created = True):
