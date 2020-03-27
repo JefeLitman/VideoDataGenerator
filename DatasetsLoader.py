@@ -1,6 +1,6 @@
 """Video Data Generator for Any Video Dataset with Custom Transformations
 You can use it in your own and only have three dependencies with opencv, numpy and pandas.
-Version: 2.2.6
+Version: 2.2.7
 """
 
 import os
@@ -530,32 +530,38 @@ class VideoDataGenerator():
                 'encuentra la carpeta dev y por ende no se tienen datos en dev'
             )
 
-    def get_train_generator(self, n_canales = 3):
+    def get_train_generator(self, epochs, n_canales = 3):
         """Metodo que se encarga de retornar el generador de los batches de
         entrenamiento retornardo una tupla de batch y label.
         Args:
+            epochs: Numero entero que corresponde al numero de epocas que tendra el generador.
             n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
         """
-        for _ in range(self.train_batches):
-            yield self.get_next_train_batch(n_canales)
+        for _ in range(epochs):
+            for __ in range(self.train_batches):
+                yield self.get_next_train_batch(n_canales)
 
-    def get_test_generator(self, n_canales = 3):
+    def get_test_generator(self, epochs, n_canales = 3):
         """Metodo que se encarga de retornar el generador de los batches de
         testeo retornardo una tupla de batch y label.
         Args:
+            epochs: Numero entero que corresponde al numero de epocas que tendra el generador.
             n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
         """
-        for _ in range(self.test_batches):
-            yield self.get_next_test_batch(n_canales)
+        for _ in range(epochs):
+            for __ in range(self.test_batches):
+                yield self.get_next_test_batch(n_canales)
 
-    def get_dev_generator(self, n_canales = 3):
+    def get_dev_generator(self, epochs, n_canales = 3):
         """Metodo que se encarga de retornar el generador de los batches de
         dev retornardo una tupla de batch y label.
         Args:
+            epochs: Numero entero que corresponde al numero de epocas que tendra el generador.
             n_canales: Numero que corresponde al numero de canales que posee las imagenes. Por defecto en 3.
         """
-        for _ in range(self.dev_batches):
-            yield self.get_next_dev_batch(n_canales)
+        for _ in range(epochs):
+            for __ in range(self.dev_batches):
+                yield self.get_next_dev_batch(n_canales)
 
     def load_raw_frame(self,frame_path, channels = 3, original_size_created = True):
         """Metodo que se encarga de cargar los frames dada la ruta en memoria
