@@ -11,7 +11,7 @@ import types
 class load_videoFrames_from_path():
     """Class to take frames of videos from a folder structure and returns
     the generators to train, test and optionally dev.
-    Version 1.1
+    Version 1.2
     """
     def __init__(self,
                  directory_path,
@@ -53,7 +53,7 @@ class load_videoFrames_from_path():
         self.__size__ = frames_size
         self.__data_format__ = data_format
 
-    def __build__data_folders__(self, directory_path):
+    def __build_data_folders__(self, directory_path):
         self.__dev_path__ = None
         directories = os.listdir(directory_path)
         for i in directories:
