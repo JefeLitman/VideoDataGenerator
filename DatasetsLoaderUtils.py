@@ -1,6 +1,5 @@
 """VideoDatasetsLoader file for any Video Data to be loaded with a generator.
 The requieriments are Numpy, opencv and pandas.
-Version 0.1
 """
 
 import os
