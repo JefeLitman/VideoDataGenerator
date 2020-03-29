@@ -11,7 +11,7 @@ import types
 class load_videoFrames_from_path():
     """Class to take frames of videos from a folder structure and returns
     the generators to train, test and optionally dev.
-    Version 1.4
+    Version 1.3
     """
     def __init__(self,
                  directory_path,
@@ -89,11 +89,6 @@ class load_videoFrames_from_path():
             if self.__dev_path__:
                 videos_dev_path = os.path.join(self.__dev_path__,clase)
                 self.__videos_dev_path__ += [os.path.join(videos_dev_path,i) for i in sorted(os.listdir(videos_dev_path))]
-
-        self.len_train_data = len(self.__videos_train_path__)
-        self.len_test_data = len(self.__videos_test_path__)
-        if self.__dev_path__:
-            self.len_dev_data = len(self.__videos_dev_path__)
 
     def __load_video__(self, video_path, channels = 3):
         video = []
@@ -237,12 +232,9 @@ class flow_from_tablePaths():
                     'Inside table_paths exists a video_type invalid, The valid values are '
                     '"train", "test" and "dev". Value given: ' + str(video_param[1]))
 
-        self.len_train_data = len(self.__videos_train_path__)
-        self.len_test_data = len(self.__videos_test_path__)
         if len(videos_dev_path) > 0:
             self.__dev_indexes__ = dev_indexes
             self.__videos_dev_path__ = videos_dev_path
-            self.len_dev_data = len(self.__videos_dev_path__)
         else:
             self.__dev_indexes__ = False
     
