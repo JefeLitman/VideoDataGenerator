@@ -11,7 +11,7 @@ import types
 class load_videoFrames_from_path():
     """Class to take frames of videos from a folder structure and returns
     the generators to train, test and optionally dev.
-    Version 1.2
+    Version 1.3
     """
     def __init__(self,
                  directory_path,
@@ -119,11 +119,11 @@ class load_videoFrames_from_path():
             return img
 
     def data_generator(self, data_type, channels):
-        if data_type == 'train':
+        if data_type == 1:
             data = self.__videos_train_path__
-        elif data_type == 'test':
+        elif data_type == 2:
             data = self.__videos_test_path__
-        elif data_type == 'dev':
+        elif data_type == 3:
             if self.__dev_path__:
                 data = self.__videos_dev_path__
             else:
@@ -132,7 +132,7 @@ class load_videoFrames_from_path():
                 )
         else:
             raise ValueError(
-                'The data_type given is not "train", "test" or "dev". data_type given {i}'.format(i=data_type)
+                'The data_type given is not 1 to "train", 2 to "test" or 3 to "dev". data_type given {i}'.format(i=data_type)
             )
         for video_path in data:
             label = self.to_number[video_path.split("/")[-2].lower()]
@@ -167,7 +167,7 @@ class flow_from_tablePaths():
     """Class to take a dataframe, numpy matrix or Python list of lists 
     to read video data and returns the generators to train, test and 
     optionally dev.
-    Version 1.1
+    Version 1.2
     """
     def __init__(self,
                  table_paths,
@@ -271,13 +271,13 @@ class flow_from_tablePaths():
             return img
 
     def data_generator(self, data_type, channels):
-        if data_type == 'train':
+        if data_type == 1:
             data = self.__videos_train_path__
             indexes = self.__train_indexes__
-        elif data_type == 'test':
+        elif data_type == 2:
             data = self.__videos_test_path__
             indexes = self.__test_indexes__
-        elif data_type == 'dev':
+        elif data_type == 3:
             if self.__dev_indexes__:
                 data = self.__videos_dev_path__
                 indexes = self.__dev_indexes__
@@ -287,7 +287,7 @@ class flow_from_tablePaths():
                 )
         else:
             raise ValueError(
-                'The data_type given is not "train", "test" or "dev". data_type given {i}'.format(i=data_type)
+                'The data_type given is not 1 to "train", 2 to "test" or 3 to "dev". data_type given {i}'.format(i=data_type)
             )
         for index, video_path in enumerate(data):
             label = self.to_number[str(self.__data__[indexes[index], 2]).lower()]
