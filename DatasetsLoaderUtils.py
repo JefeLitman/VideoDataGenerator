@@ -7,12 +7,11 @@ import cv2
 import numpy as np
 import pandas as pd
 import types
-from typing import List, Tuple
 
 class load_videoFrames_from_path():
     """Class to take frames of videos from a folder structure and returns
     the generators to train, test and optionally dev.
-    Version 1
+    Version 1.1
     """
     def __init__(self,
                  directory_path,
@@ -44,7 +43,7 @@ class load_videoFrames_from_path():
             raise TypeError('Directory_path must be a string. Type given: '+str(type(directory_path)))
         elif not isinstance(video_frames, types.FunctionType):
             raise TypeError('Video_frames must be a python callback. Type given: '+str(type(video_frames)))
-        elif not isinstance(frames_size, (Tuple[int], List[int], type(None))):
+        elif not isinstance(frames_size, (tuple, list, type(None))):
             raise TypeError('Frames_size can be a Tuple or List of integers. Type given: '+str(type(frames_size)))
         elif data_format not in ('channels_last', 'channels_first'):
             raise TypeError('Data_format can be "channels_last" or "channels_first". Value given: '+str(data_format))
@@ -168,7 +167,7 @@ class flow_from_tablePaths():
     """Class to take a dataframe, numpy matrix or Python list of lists 
     to read video data and returns the generators to train, test and 
     optionally dev.
-    Version 1
+    Version 1.1
     """
     def __init__(self,
                  table_paths,
@@ -199,7 +198,7 @@ class flow_from_tablePaths():
             raise TypeError('Table_paths must be a dataframe, numpy array or python list of lists. Type given: '+str(type(table_paths)))
         elif not isinstance(video_frames, types.FunctionType):
             raise TypeError('Video_frames must be a python callback. Type given: '+str(type(video_frames)))
-        elif not isinstance(frames_size, (Tuple[int], List[int], type(None))):
+        elif not isinstance(frames_size, (tuple, list, type(None))):
             raise TypeError('Frames_size can be a Tuple or List of integers. Type given: '+str(type(frames_size)))
         elif data_format not in ('channels_last', 'channels_first'):
             raise TypeError('Data_format can be "channels_last" or "channels_first". Value given: '+str(data_format))
