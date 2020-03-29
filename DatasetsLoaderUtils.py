@@ -160,9 +160,10 @@ class load_videoFrames_from_path():
 class load_videoFiles_from_path():
     """Class to take video files from a folder structure and returns
     the generators to train, test and optionally dev.
-    Version 0
+    Version 0.1
     """
-    raise NotImplementedError('This util is not implemented yet... Sorry :(')
+    def __init__(self):
+        raise NotImplementedError('This util is not implemented yet... Sorry :(')
 
 class flow_from_tablePaths():
     """Class to take a dataframe, numpy matrix or Python list of lists 
