@@ -204,7 +204,12 @@ class flow_from_tablePaths():
             raise TypeError('Data_format can be "channels_last" or "channels_first". Value given: '+str(data_format))
 
         # Set basic attributes
-        self.__data__ = table_paths
+        if isinstance(table_paths, list):
+            self.__data__ = np.r_[table_paths]
+        elif isinstance(table_paths, pd.DataFrame):
+            self.__data__ = table_paths.values
+        else:
+            self.__data__ = table_paths
         self.__transformation__ = video_frames
         self.__size__ = frames_size
         self.__data_format__ = data_format
