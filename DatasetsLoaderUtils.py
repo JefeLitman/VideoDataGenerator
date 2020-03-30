@@ -11,7 +11,7 @@ import types
 class load_videoFrames_from_path():
     """Class to take frames of videos from a folder structure and returns
     the generators to train, test and optionally dev.
-    Version 1.3
+    Version 1.4
     """
     def __init__(self,
                  directory_path,
@@ -99,6 +99,8 @@ class load_videoFrames_from_path():
             video.append(image)
 
         video = np.asarray(video, dtype=np.float32)
+        if channels == 1:
+            video = video.reshape((video.shape[0], video.shape[1], video.shape[2], 1))
         if self.__data_format__ == 'channels_last':
             return video
         else:
@@ -107,7 +109,6 @@ class load_videoFrames_from_path():
     def __load_frame__(self, frame_path, channels = 3):
         if channels == 1:
             img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
-            img = img.reshape((img.shape[0], img.shape[1], 1))
         elif channels == 3:
             img =  cv2.cvtColor(cv2.imread(frame_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
         else:
@@ -167,7 +168,7 @@ class flow_from_tablePaths():
     """Class to take a dataframe, numpy matrix or Python list of lists 
     to read video data and returns the generators to train, test and 
     optionally dev.
-    Version 1.3
+    Version 1.4
     """
     def __init__(self,
                  table_paths,
@@ -256,6 +257,8 @@ class flow_from_tablePaths():
             video.append(image)
 
         video = np.asarray(video, dtype=np.float32)
+        if channels == 1:
+            video = video.reshape((video.shape[0], video.shape[1], video.shape[2], 1))
         if self.__data_format__ == 'channels_last':
             return video
         else:
@@ -264,7 +267,6 @@ class flow_from_tablePaths():
     def __load_frame__(self, frame_path, channels = 3):
         if channels == 1:
             img = cv2.imread(frame_path, cv2.IMREAD_GRAYSCALE)
-            img = img.reshape((img.shape[0], img.shape[1], 1))
         elif channels == 3:
             img =  cv2.cvtColor(cv2.imread(frame_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
         else:
